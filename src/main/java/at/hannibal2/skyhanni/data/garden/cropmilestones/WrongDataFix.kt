@@ -66,7 +66,7 @@ object WrongDataFix {
     }
 
     @HandleEvent
-    fun onWidgetUpdate(event: WidgetUpdateEvent) {
+    fun onTabListUpdate(event: WidgetUpdateEvent) {
         if (!event.isWidget(TabWidget.CROP_MILESTONE)) return
         tabListPercentPattern.firstMatcher(event.lines.map { it.string }) {
             val tier = group("tier").toInt()

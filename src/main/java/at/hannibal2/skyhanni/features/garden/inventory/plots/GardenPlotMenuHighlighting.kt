@@ -3,9 +3,13 @@ package at.hannibal2.skyhanni.features.garden.inventory.plots
 import at.hannibal2.skyhanni.api.event.HandleEvent
 import at.hannibal2.skyhanni.config.features.garden.PlotMenuHighlightingConfig.PlotStatusType
 import at.hannibal2.skyhanni.events.GuiContainerEvent
+import at.hannibal2.skyhanni.events.InventoryUpdatedEvent
 import at.hannibal2.skyhanni.features.garden.GardenApi
-import at.hannibal2.skyhanni.features.garden.plot.GardenPlot
-import at.hannibal2.skyhanni.features.garden.plot.GardenPlotApi
+import at.hannibal2.skyhanni.features.garden.GardenPlotApi
+import at.hannibal2.skyhanni.features.garden.GardenPlotApi.currentSpray
+import at.hannibal2.skyhanni.features.garden.GardenPlotApi.isBeingPasted
+import at.hannibal2.skyhanni.features.garden.GardenPlotApi.locked
+import at.hannibal2.skyhanni.features.garden.GardenPlotApi.pests
 import at.hannibal2.skyhanni.skyhannimodule.SkyHanniModule
 import at.hannibal2.skyhanni.utils.InventoryUtils
 import at.hannibal2.skyhanni.utils.RenderUtils.highlight
@@ -15,10 +19,10 @@ object GardenPlotMenuHighlighting {
 
     private val config get() = GardenApi.config.plotMenuHighlighting
 
-    private val highlightedPlots = mutableMapOf<GardenPlot, PlotStatusType>()
+    private val highlightedPlots = mutableMapOf<GardenPlotApi.Plot, PlotStatusType>()
 
     @HandleEvent
-    fun onInventoryUpdated() {
+    fun onInventoryUpdated(event: InventoryUpdatedEvent) {
         if (!isEnabled()) return
 
         for (slot in InventoryUtils.getItemsInOpenChest()) {
@@ -55,7 +59,7 @@ object GardenPlotMenuHighlighting {
         }
     }
 
-    private fun handleStackSize(plot: GardenPlot, status: PlotStatusType): Int {
+    private fun handleStackSize(plot: GardenPlotApi.Plot, status: PlotStatusType): Int {
         return when (status.name) {
             "§cPests" -> return plot.pests
             "§eSprays" -> return plot.currentSpray?.expiry?.timeUntil()?.inWholeMinutes?.toInt() ?: 1
@@ -63,7 +67,7 @@ object GardenPlotMenuHighlighting {
         }
     }
 
-    private fun handleCurrent(plot: GardenPlot, status: PlotStatusType) {
+    private fun handleCurrent(plot: GardenPlotApi.Plot, status: PlotStatusType) {
         val isHighlighted = highlightedPlots.containsKey(plot)
         val isCurrent = highlightedPlots[plot] == status
         if (!isHighlighted || isCurrent) {

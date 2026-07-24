@@ -3,8 +3,10 @@ package at.hannibal2.skyhanni.features.foraging
 import at.hannibal2.skyhanni.SkyHanniMod
 import at.hannibal2.skyhanni.api.event.HandleEvent
 import at.hannibal2.skyhanni.config.storage.Resettable
+import at.hannibal2.skyhanni.data.IslandType
 import at.hannibal2.skyhanni.data.IslandTypeTag
 import at.hannibal2.skyhanni.data.achievements.Achievement
+import at.hannibal2.skyhanni.events.IslandChangeEvent
 import at.hannibal2.skyhanni.events.achievements.AchievementRegistrationEvent
 import at.hannibal2.skyhanni.events.chat.SkyHanniChatEvent
 import at.hannibal2.skyhanni.features.achievements.AchievementManager
@@ -26,7 +28,7 @@ import net.minecraft.network.chat.Component
 object CompactStarlynSisters {
 
     private val config get() = SkyHanniMod.feature.foraging.starlynContest
-    private val patternGroup = RepoPattern.group("foraging.starlyn-contest")
+    private val patternGroup = RepoPattern.group("foraging.agatha")
 
     /**
      * REGEX-TEST: §e[NPC] §bAgatha§f: §rYou reached the §r§lCOMMON §fBracket in my contest!
@@ -153,7 +155,8 @@ object CompactStarlynSisters {
     }
 
     @HandleEvent
-    fun onIslandLeave() {
+    fun onIslandChange(event: IslandChangeEvent) {
+        if (event.oldIsland != IslandType.GALATEA) return
         resetContestResultVariables()
         resetPersonalBestVariables()
     }
@@ -166,22 +169,22 @@ object CompactStarlynSisters {
             compactContestResults(message)
     }
 
-    private const val STARLYN_CONTEST_ACHIEVEMENT = "Very Special Bracket"
+    private const val AGATHA_ACHIEVEMENT = "Very Special Bracket"
 
     @HandleEvent
     fun onAchievementRegistration(event: AchievementRegistrationEvent) {
         val achievement = Achievement(
             name = "Very Special Contest".asComponent(),
-            description = Component.literal("Get 20,000 Starlyn Sister points in a contest").withColor(ChatFormatting.RED),
+            description = Component.literal("Get 20,000 Agatha points in a contest").withColor(ChatFormatting.RED),
             userLuckAmount = 20f,
         )
-        event.register(achievement, STARLYN_CONTEST_ACHIEVEMENT)
+        event.register(achievement, AGATHA_ACHIEVEMENT)
     }
 
     private fun SkyHanniChatEvent.Allow.achievements() {
         pointsEarnedPattern.matchMatcher(message) {
             if (group("pointsInteger").formatInt() >= 20_000) {
-                AchievementManager.completeAchievement(STARLYN_CONTEST_ACHIEVEMENT)
+                AchievementManager.completeAchievement(AGATHA_ACHIEVEMENT)
             }
         }
     }

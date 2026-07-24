@@ -8,6 +8,7 @@ import at.hannibal2.skyhanni.config.commands.brigadier.BrigadierArguments
 import at.hannibal2.skyhanni.config.commands.brigadier.PlayerSuggestions
 import at.hannibal2.skyhanni.config.enums.OutsideSBFeature
 import at.hannibal2.skyhanni.data.model.TabWidget
+import at.hannibal2.skyhanni.events.ConfigLoadEvent
 import at.hannibal2.skyhanni.events.WidgetUpdateEvent
 import at.hannibal2.skyhanni.events.entity.EntityEnterWorldEvent
 import at.hannibal2.skyhanni.features.commands.tabcomplete.PlayerNameSource
@@ -108,7 +109,7 @@ object MarkedPlayerManager {
     }
 
     @HandleEvent
-    fun onConfigLoad() {
+    fun onConfigLoad(event: ConfigLoadEvent) {
         config.markOwnName.whenChanged { _, new ->
             val name = PlayerUtils.getName()
             if (new) {
@@ -142,7 +143,7 @@ object MarkedPlayerManager {
     }
 
     @HandleEvent
-    fun onWidgetUpdate(event: WidgetUpdateEvent) {
+    fun onTablistUpdate(event: WidgetUpdateEvent) {
         if (!isEnabled()) return
         if (!config.joinLeaveMessage.enabled) return
         if (!event.isWidget(TabWidget.PLAYER_LIST)) return

@@ -23,6 +23,7 @@ import at.hannibal2.skyhanni.events.minecraft.SkyHanniTickEvent
 import at.hannibal2.skyhanni.features.event.hoppity.HoppityCollectionStats
 import at.hannibal2.skyhanni.features.garden.CropType.Companion.getCropType
 import at.hannibal2.skyhanni.features.garden.CropType.Companion.isTimeFlower
+import at.hannibal2.skyhanni.features.garden.GardenPlotApi.checkCurrentPlot
 import at.hannibal2.skyhanni.features.garden.composter.ComposterOverlay
 import at.hannibal2.skyhanni.features.garden.contest.FarmingContestApi
 import at.hannibal2.skyhanni.features.garden.farming.GardenBestCropTime
@@ -30,10 +31,8 @@ import at.hannibal2.skyhanni.features.garden.farming.GardenCropSpeed
 import at.hannibal2.skyhanni.features.garden.inventory.SkyMartCopperPrice
 import at.hannibal2.skyhanni.features.garden.pests.PestApi.patternGroup
 import at.hannibal2.skyhanni.features.garden.pests.PesthunterProfit
-import at.hannibal2.skyhanni.features.garden.plot.GardenPlotApi
-import at.hannibal2.skyhanni.features.garden.plot.GardenPlotApi.checkCurrentPlot
 import at.hannibal2.skyhanni.features.garden.visitor.VisitorApi
-import at.hannibal2.skyhanni.features.inventory.CurrentEquipmentApi
+import at.hannibal2.skyhanni.features.inventory.EquipmentApi
 import at.hannibal2.skyhanni.features.inventory.EquipmentSlot
 import at.hannibal2.skyhanni.features.inventory.chocolatefactory.CFApi
 import at.hannibal2.skyhanni.features.inventory.chocolatefactory.CFShopPrice
@@ -61,7 +60,7 @@ import at.hannibal2.skyhanni.utils.SkyBlockUtils
 import at.hannibal2.skyhanni.utils.StringUtils.addSkyHanniUtm
 import at.hannibal2.skyhanni.utils.collection.CollectionUtils.containsKeys
 import at.hannibal2.skyhanni.utils.collection.TimeLimitedCache
-import at.hannibal2.skyhanni.utils.compat.MinecraftCompat
+import net.minecraft.client.Minecraft
 import net.minecraft.world.phys.AABB
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
@@ -70,7 +69,6 @@ import kotlin.time.Duration.Companion.minutes
 object GardenApi {
 
     private const val GARDEN_OVERFLOW_EXP = 10000
-
     private val RARE_MOOSHROOM_COW_PET = "MOOSHROOM_COW;2".toInternalName()
     val SQUEAKY_MOUSEMAT = "SQUEAKY_MOUSEMAT".toInternalName()
     val SUNS_GRASP = "SUNS_GRASP".toInternalName()
@@ -125,7 +123,7 @@ object GardenApi {
             if (cropInHand.isTimeFlower()) checkItemInHand()
 
             // We ignore random hypixel moments
-            MinecraftCompat.screen ?: return
+            Minecraft.getInstance().screen ?: return
             checkItemInHand()
         }
     }
@@ -200,7 +198,7 @@ object GardenApi {
     fun hasMousematInHand(): Boolean = InventoryUtils.getItemInHand()?.getInternalName() == SQUEAKY_MOUSEMAT
 
     fun hasActiveSunsGrasp(): Boolean =
-        CurrentEquipmentApi.getEquipment(EquipmentSlot.GLOVES)?.getInternalName() == SUNS_GRASP &&
+        EquipmentApi.getEquipment(EquipmentSlot.GLOVES)?.getInternalName() == SUNS_GRASP &&
             InventoryUtils.getItemInHand()?.isEmpty == true
 
     fun NeuInternalName.getCropType(): CropType? =
@@ -252,8 +250,8 @@ object GardenApi {
         // TODO Reevaluate this if Hypixel ever adds right click harvest crops
         if (event.clickType != InteractClickType.LEFT_CLICK) return
 
-        val cropBroken = event.getCropType() ?: return
         val blockState = event.blockState
+        val cropBroken = blockState.getCropType(event.position) ?: return
         if (cropBroken.multiplier == 1 && blockState.isBabyCrop()) return
 
         val position = event.position

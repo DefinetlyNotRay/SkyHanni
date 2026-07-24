@@ -5,7 +5,6 @@ import at.hannibal2.skyhanni.config.ConfigManager
 import at.hannibal2.skyhanni.data.jsonobjects.repo.ItemsJson
 import at.hannibal2.skyhanni.data.jsonobjects.repo.neu.NeuItemJson
 import at.hannibal2.skyhanni.events.RepositoryReloadEvent
-import at.hannibal2.skyhanni.features.inventory.attribute.AttributeShardsData
 import at.hannibal2.skyhanni.skyhannimodule.SkyHanniModule
 import at.hannibal2.skyhanni.test.command.ErrorManager
 import at.hannibal2.skyhanni.utils.InventoryUtils
@@ -23,7 +22,6 @@ import at.hannibal2.skyhanni.utils.SafeItemStack
 import at.hannibal2.skyhanni.utils.StringUtils.cleanString
 import at.hannibal2.skyhanni.utils.StringUtils.removeColor
 import at.hannibal2.skyhanni.utils.UtilsPatterns
-import at.hannibal2.skyhanni.utils.compat.MinecraftCompat
 import at.hannibal2.skyhanni.utils.compat.container
 import at.hannibal2.skyhanni.utils.compat.getCompoundOrDefault
 import at.hannibal2.skyhanni.utils.compat.getIntOrDefault
@@ -32,6 +30,7 @@ import at.hannibal2.skyhanni.utils.ensureComponentsBound
 import at.hannibal2.skyhanni.utils.itemType
 import at.hannibal2.skyhanni.utils.repopatterns.RepoPattern
 import com.google.gson.JsonObject
+import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.gui.screens.inventory.ContainerScreen
 import net.minecraft.core.component.DataComponentMap
@@ -195,7 +194,7 @@ class ItemResolutionQuery {
     }
 
     fun withCurrentGuiContext(): ItemResolutionQuery {
-        this.guiContext = MinecraftCompat.screen
+        this.guiContext = Minecraft.getInstance().screen
         return this
     }
 
@@ -358,7 +357,7 @@ class ItemResolutionQuery {
             findInternalNameByDisplayName(displayName, false)
         } else if (guiName.endsWith("Experimentation Table RNG")) {
             resolveEnchantmentByName(displayName)
-        } else if (AttributeShardsData.attributeMenuPattern.matches(guiName)) {
+        } else if (guiName == "Attribute Menu") {
             resolveItemInAttributeMenu(compound.getLore())
         } else if (guiName == "Hunting Box" || guiName == "Fusion Box" || guiName == "Shard Fusion") {
             resolveItemInHuntingBoxMenu(displayName)

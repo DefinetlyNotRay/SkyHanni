@@ -3,15 +3,16 @@ package at.hannibal2.skyhanni.features.inventory.wardrobe
 import at.hannibal2.skyhanni.api.event.HandleEvent
 import at.hannibal2.skyhanni.data.ProfileStorageData
 import at.hannibal2.skyhanni.events.DebugDataCollectEvent
+import at.hannibal2.skyhanni.events.InventoryCloseEvent
 import at.hannibal2.skyhanni.events.InventoryOpenEvent
 import at.hannibal2.skyhanni.events.InventoryUpdatedEvent
-import at.hannibal2.skyhanni.features.inventory.CurrentEquipmentApi
+import at.hannibal2.skyhanni.features.inventory.EquipmentApi
 import at.hannibal2.skyhanni.features.inventory.EquipmentSlot
 import at.hannibal2.skyhanni.skyhannimodule.SkyHanniModule
 import at.hannibal2.skyhanni.utils.SafeItemStack
 
 @SkyHanniModule
-object EquipmentWardrobeApi : AbstractWardrobeApi() {
+object EquipmentWardrobeApi : WardrobeApi() {
 
     /**
      * REGEX-TEST: (1/2) Equipment Sets
@@ -35,12 +36,12 @@ object EquipmentWardrobeApi : AbstractWardrobeApi() {
     fun onInventoryUpdated(event: InventoryUpdatedEvent) = handleInventoryUpdated(event)
 
     @HandleEvent
-    fun onInventoryClose() = handleInventoryClose()
+    fun onInventoryClose(event: InventoryCloseEvent) = handleInventoryClose()
 
     @HandleEvent
     fun onDebugDataCollect(event: DebugDataCollectEvent) = handleDebugDataCollect(event)
 
     override fun onEquippedSlotUpdated(items: List<SafeItemStack?>) {
-        EquipmentSlot.entries.forEach { CurrentEquipmentApi.setEquipment(it, items[it.ordinal]) }
+        EquipmentSlot.entries.forEach { EquipmentApi.setEquipment(it, items[it.ordinal]) }
     }
 }

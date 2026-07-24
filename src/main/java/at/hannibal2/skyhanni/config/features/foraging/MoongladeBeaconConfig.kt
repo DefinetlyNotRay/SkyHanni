@@ -7,7 +7,7 @@ import io.github.notenoughupdates.moulconfig.annotations.ConfigEditorBoolean
 import io.github.notenoughupdates.moulconfig.annotations.ConfigLink
 import io.github.notenoughupdates.moulconfig.annotations.ConfigOption
 
-class ForagingBeaconConfig {
+class MoongladeBeaconConfig {
 
     @Expose
     @ConfigOption(name = "Beacon Solver", desc = "Shows which slots to click on to solve the beacon.")
@@ -26,13 +26,13 @@ class ForagingBeaconConfig {
     var preventOverClicking: Boolean = true
 
     @Expose
-    @ConfigOption(name = "Alert when ready", desc = "Sends a title when the foraging beacons are ready to be activated.")
+    @ConfigOption(name = "Alert when ready", desc = "Sends a title when the moonglade beacon is ready to be activated.")
     @FeatureToggle
     @ConfigEditorBoolean
     var beaconAlert: Boolean = true
 
     @Expose
-    @ConfigLink(owner = ForagingBeaconConfig::class, field = "enabled")
+    @ConfigLink(owner = MoongladeBeaconConfig::class, field = "enabled")
     val displayPosition: Position = Position(-300, 140)
 
 }

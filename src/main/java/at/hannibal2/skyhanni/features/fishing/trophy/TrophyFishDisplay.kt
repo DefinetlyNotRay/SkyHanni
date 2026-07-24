@@ -8,6 +8,7 @@ import at.hannibal2.skyhanni.config.features.fishing.trophyfishing.TrophyFishDis
 import at.hannibal2.skyhanni.config.features.fishing.trophyfishing.TrophyFishDisplayConfig.TrophySorting
 import at.hannibal2.skyhanni.config.features.fishing.trophyfishing.TrophyFishDisplayConfig.WhenToShow
 import at.hannibal2.skyhanni.data.IslandType
+import at.hannibal2.skyhanni.events.IslandJoinEvent
 import at.hannibal2.skyhanni.events.fishing.TrophyFishCaughtEvent
 import at.hannibal2.skyhanni.features.fishing.FishingApi
 import at.hannibal2.skyhanni.features.misc.items.EstimatedItemValue
@@ -32,11 +33,11 @@ import at.hannibal2.skyhanni.utils.collection.RenderableCollectionUtils.addSingl
 import at.hannibal2.skyhanni.utils.collection.RenderableCollectionUtils.addString
 import at.hannibal2.skyhanni.utils.collection.TimeLimitedCache
 import at.hannibal2.skyhanni.utils.compat.InventoryGuiScaleCompat
-import at.hannibal2.skyhanni.utils.compat.MinecraftCompat
 import at.hannibal2.skyhanni.utils.renderables.Renderable
 import at.hannibal2.skyhanni.utils.renderables.container.table.TableRenderable.Companion.table
 import at.hannibal2.skyhanni.utils.renderables.primitives.ItemStackRenderable.Companion.item
 import at.hannibal2.skyhanni.utils.renderables.primitives.text
+import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.inventory.InventoryScreen
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -50,8 +51,9 @@ object TrophyFishDisplay {
 
     private var display = emptyList<Renderable>()
 
-    @HandleEvent(onlyOnIsland = CRIMSON_ISLE)
-    fun onIslandJoin() {
+    @HandleEvent
+    fun onIslandJoin(event: IslandJoinEvent) {
+        if (event.island != IslandType.CRIMSON_ISLE) return
         DelayedRun.runDelayed(200.milliseconds) {
             TrophyFishManager.loadMissingTrophyFish()
             update()
@@ -292,12 +294,12 @@ object TrophyFishDisplay {
 
     private fun canRender(): Boolean = when (config.whenToShow.get()!!) {
         WhenToShow.ALWAYS -> true
-        WhenToShow.ONLY_IN_INVENTORY -> MinecraftCompat.screen is InventoryScreen
+        WhenToShow.ONLY_IN_INVENTORY -> Minecraft.getInstance().screen is InventoryScreen
         WhenToShow.ONLY_WITH_ROD_IN_HAND -> FishingApi.holdingLavaRod
         WhenToShow.ONLY_WITH_KEYBIND -> config.keybind.isKeyHeld()
     }
 
-    private fun isEnabled() = (IslandType.CRIMSON_ISLE.isInIsland() || SkyBlockUtils.isStrandedProfile) && config.enabled.get()
+    fun isEnabled() = (IslandType.CRIMSON_ISLE.isInIsland() || SkyBlockUtils.isStrandedProfile) && config.enabled.get()
 
     @HandleEvent
     fun onConfigFix(event: ConfigUpdaterMigrator.ConfigFixEvent) {

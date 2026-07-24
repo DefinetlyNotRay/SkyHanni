@@ -9,13 +9,20 @@ import at.hannibal2.skyhanni.config.features.garden.pests.PestFinderConfig.WhenT
 import at.hannibal2.skyhanni.data.IslandType
 import at.hannibal2.skyhanni.data.model.TabWidget
 import at.hannibal2.skyhanni.data.title.TitleManager
+import at.hannibal2.skyhanni.events.IslandChangeEvent
 import at.hannibal2.skyhanni.events.PlaySoundEvent
 import at.hannibal2.skyhanni.events.chat.SkyHanniChatEvent
+import at.hannibal2.skyhanni.events.garden.pests.PestUpdateEvent
 import at.hannibal2.skyhanni.events.minecraft.KeyPressEvent
 import at.hannibal2.skyhanni.events.minecraft.SkyHanniRenderWorldEvent
 import at.hannibal2.skyhanni.features.garden.GardenApi
-import at.hannibal2.skyhanni.features.garden.plot.GardenPlot
-import at.hannibal2.skyhanni.features.garden.plot.GardenPlotApi.renderPlot
+import at.hannibal2.skyhanni.features.garden.GardenPlotApi
+import at.hannibal2.skyhanni.features.garden.GardenPlotApi.isPestCountInaccurate
+import at.hannibal2.skyhanni.features.garden.GardenPlotApi.isPlayerInside
+import at.hannibal2.skyhanni.features.garden.GardenPlotApi.name
+import at.hannibal2.skyhanni.features.garden.GardenPlotApi.pests
+import at.hannibal2.skyhanni.features.garden.GardenPlotApi.renderPlot
+import at.hannibal2.skyhanni.features.garden.GardenPlotApi.sendTeleportTo
 import at.hannibal2.skyhanni.skyhannimodule.SkyHanniModule
 import at.hannibal2.skyhanni.utils.ChatUtils
 import at.hannibal2.skyhanni.utils.ConfigUtils
@@ -28,11 +35,11 @@ import at.hannibal2.skyhanni.utils.RenderUtils.renderRenderables
 import at.hannibal2.skyhanni.utils.SimpleTimeMark
 import at.hannibal2.skyhanni.utils.StringUtils
 import at.hannibal2.skyhanni.utils.collection.RenderableCollectionUtils.addString
-import at.hannibal2.skyhanni.utils.compat.MinecraftCompat
 import at.hannibal2.skyhanni.utils.render.WorldRenderUtils.drawDynamicText
 import at.hannibal2.skyhanni.utils.render.WorldRenderUtils.drawWaypointFilled
 import at.hannibal2.skyhanni.utils.render.WorldRenderUtils.exactPlayerEyeLocation
 import at.hannibal2.skyhanni.utils.renderables.Renderable
+import net.minecraft.client.Minecraft
 import kotlin.time.Duration.Companion.seconds
 
 @SkyHanniModule
@@ -43,7 +50,7 @@ object PestFinder {
     private var display = emptyList<Renderable>()
 
     @HandleEvent
-    fun onPestUpdate() {
+    fun onPestUpdate(event: PestUpdateEvent) {
         update()
     }
 
@@ -117,7 +124,7 @@ object PestFinder {
     }
 
     @HandleEvent
-    fun onIslandChange() {
+    fun onIslandChange(event: IslandChangeEvent) {
         display = listOf()
         update()
     }
@@ -189,7 +196,7 @@ object PestFinder {
     }
 
     private fun drawName(
-        plot: GardenPlot,
+        plot: GardenPlotApi.Plot,
         playerLocation: LorenzVec,
         event: SkyHanniRenderWorldEvent,
     ) {
@@ -215,7 +222,7 @@ object PestFinder {
 
     @HandleEvent(onlyOnIsland = IslandType.GARDEN)
     fun onKeyPress(event: KeyPressEvent) {
-        if (MinecraftCompat.screen != null) return
+        if (Minecraft.getInstance().screen != null) return
 
         if (event.keyCode != config.teleportHotkey) return
         if (lastKeyPress.passedSince() < 2.seconds) return

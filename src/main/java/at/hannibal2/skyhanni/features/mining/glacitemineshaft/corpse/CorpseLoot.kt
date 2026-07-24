@@ -5,7 +5,6 @@ import at.hannibal2.skyhanni.data.IslandType
 import at.hannibal2.skyhanni.events.chat.SkyHanniChatEvent
 import at.hannibal2.skyhanni.events.mining.CorpseLootedEvent
 import at.hannibal2.skyhanni.skyhannimodule.SkyHanniModule
-import at.hannibal2.skyhanni.utils.DelayedRun
 import at.hannibal2.skyhanni.utils.ItemUtils
 import at.hannibal2.skyhanni.utils.RegexUtils.matchMatcher
 import at.hannibal2.skyhanni.utils.RegexUtils.matches
@@ -39,24 +38,10 @@ object CorpseLoot {
      */
     private val itemPattern by chatPatternGroup.pattern("item", " {4}§r(?<item>.+)")
 
-    /**
-     * REGEX-TEST: LUCKY! Your Resourceful perk saved your key from being consumed!
-     */
-    private val resourceFulPerkProcPattern by chatPatternGroup.pattern(
-        "resourceful",
-        "LUCKY! Your Resourceful perk saved your key from being consumed!"
-    )
-
     private var inLoot = false
     private val loot = mutableListOf<Pair<String, Int>>()
 
     private var corpseType: CorpseType? = null
-    private var pendingKeyConsumed = true
-
-    @HandleEvent(onlyOnSkyblock = true)
-    fun onIslandChange() {
-        pendingKeyConsumed = true
-    }
 
     @HandleEvent(onlyOnIsland = IslandType.MINESHAFT)
     fun onChat(event: SkyHanniChatEvent.Allow) {
@@ -69,20 +54,11 @@ object CorpseLoot {
             return
         }
 
-        if (resourceFulPerkProcPattern.matches(event.cleanMessage)) {
-            pendingKeyConsumed = false
-            return
-        }
-
         if (!inLoot) return
 
         if (endPattern.matches(message)) {
             corpseType?.let {
-                val finalLoot = loot.toList()
-                DelayedRun.runNextTickOld {
-                    CorpseLootedEvent(it, finalLoot, keyConsumed = pendingKeyConsumed).post()
-                    pendingKeyConsumed = true
-                }
+                CorpseLootedEvent(it, loot.toList()).post()
             }
             corpseType = null
             loot.clear()

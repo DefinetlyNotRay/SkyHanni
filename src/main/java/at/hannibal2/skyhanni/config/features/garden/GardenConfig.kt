@@ -13,12 +13,10 @@ import at.hannibal2.skyhanni.config.features.garden.optimalAngles.OptimalAnglesC
 import at.hannibal2.skyhanni.config.features.garden.optimalspeed.OptimalSpeedConfig
 import at.hannibal2.skyhanni.config.features.garden.pests.PestsConfig
 import at.hannibal2.skyhanni.config.features.garden.visitor.VisitorConfig
-import at.hannibal2.skyhanni.features.garden.farming.NoBreak.NoBreakItem
 import com.google.gson.annotations.Expose
 import io.github.notenoughupdates.moulconfig.annotations.Accordion
 import io.github.notenoughupdates.moulconfig.annotations.Category
 import io.github.notenoughupdates.moulconfig.annotations.ConfigEditorBoolean
-import io.github.notenoughupdates.moulconfig.annotations.ConfigEditorDraggableList
 import io.github.notenoughupdates.moulconfig.annotations.ConfigEditorDropdown
 import io.github.notenoughupdates.moulconfig.annotations.ConfigEditorKeybind
 import io.github.notenoughupdates.moulconfig.annotations.ConfigLink
@@ -57,11 +55,12 @@ class GardenConfig {
 
     @Expose
     @ConfigOption(
-        name = "Prevent Breaking Crops",
-        desc = "Stops you from breaking crops while holding certain items.",
+        name = "Prevent Breaking with Rod",
+        desc = "Stops you from breaking blocks while holding a fishing rod.",
     )
-    @ConfigEditorDraggableList
-    val noBreakItems: MutableList<NoBreakItem> = NoBreakItem.entries.toMutableList()
+    @ConfigEditorBoolean
+    @FeatureToggle
+    var noRodBreak: Boolean = true
 
     @Expose
     @Category(name = "Optimal Speed", desc = "Optimal Speed Settings")

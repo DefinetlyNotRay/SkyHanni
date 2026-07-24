@@ -87,11 +87,11 @@ object MaxwellApi {
     )
 
     /**
-     * REGEX-TEST: §7Accessory Power: §6419
+     * REGEX-TEST: §7Magical Power: §6419
      */
     private val inventoryMPPattern by patternGroup.pattern(
         "inventory.magicalpower",
-        "§7Accessory Power: §6(?<mp>[\\d,]+)",
+        "§7Magical Power: §6(?<mp>[\\d,]+)",
     )
 
     /**
@@ -112,11 +112,11 @@ object MaxwellApi {
     )
 
     /**
-     * REGEX-TEST: §7Total: §6419 Accessory Power
+     * REGEX-TEST: §7Total: §6419 Magical Power
      */
     private val thaumaturgyMagicalPowerPattern by patternGroup.pattern(
         "gui.thaumaturgy.magicalpower",
-        "§7Total: §6(?<mp>[\\d.,]+) Accessory Power",
+        "§7Total: §6(?<mp>[\\d.,]+) Magical Power",
     )
     private val statsTuningGuiPattern by patternGroup.pattern(
         "gui.thaumaturgy.statstuning",
@@ -260,10 +260,6 @@ object MaxwellApi {
             val value = group("amount")
             ThaumaturgyPowerTuning(value, color, name, icon)
         }
-    }
-
-    fun readTuningFromLine(line: String): ThaumaturgyPowerTuning? {
-        return thaumaturgyDataPattern.readTuningFromLine(line) ?: statsTuningDataPattern.readTuningFromLine(line)
     }
 
     private fun loadThaumaturgyCurrentPower(inventoryItems: Map<Int, SafeItemStack>) {

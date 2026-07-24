@@ -66,51 +66,59 @@ object UnknownLinesHandler {
             line != nextLine && line != secondNextLine && line != thirdNextLine && !SBPattern.thirdObjectiveLinePattern.matches(line)
         }
 
-        unknownLines = removeSidebarSection(
-            unknownLines,
-            sidebarLines,
-            SBPattern.jacobsContestPattern,
-            "§eJacob's Contest",
-            3,
-        )
+        // Remove jacobs contest
+        for (i in 1..3) {
+            unknownLines = unknownLines.filter {
+                sidebarLines.nextAfter(
+                    sidebarLines.firstOrNull { line ->
+                        SBPattern.jacobsContestPattern.matches(line)
+                    } ?: "§eJacob's Contest",
+                    i,
+                ) != it
+            }
+        }
 
-        unknownLines = removeSidebarSection(
-            unknownLines,
-            sidebarLines,
-            SBPattern.agathasContestPattern,
-            "§eAgatha's Contest",
-            2,
-        )
+        // Remove Agatha contest
+        for (i in 1..2) {
+            unknownLines = unknownLines.filter {
+                sidebarLines.nextAfter(
+                    sidebarLines.firstOrNull { line ->
+                        SBPattern.agathasContestPattern.matches(line)
+                    } ?: "§eAgatha's Contest",
+                    i,
+                ) != it
+            }
+        }
 
-        unknownLines = removeSidebarSection(
-            unknownLines,
-            sidebarLines,
-            SBPattern.miriasContestPattern,
-            "§eMiria's Contest",
-            2,
-        )
+        // Remove slayer
+        for (i in 1..2) {
+            unknownLines = unknownLines.filter {
+                sidebarLines.nextAfter(
+                    sidebarLines.firstOrNull { line ->
+                        SBPattern.slayerQuestPattern.matches(line)
+                    } ?: "Slayer Quest",
+                    i,
+                ) != it
+            }
+        }
 
-        unknownLines = removeSidebarSection(
-            unknownLines,
-            sidebarLines,
-            SBPattern.slayerQuestPattern,
-            "Slayer Quest",
-            2,
-        )
+        // remove trapper mob location
+        unknownLines = unknownLines.filter {
+            sidebarLines.nextAfter(
+                sidebarLines.firstOrNull { line ->
+                    SBPattern.mobLocationPattern.matches(line)
+                } ?: "Tracker Mob Location:",
+            ) != it
+        }
 
-        unknownLines = removeSidebarSection(
-            unknownLines,
-            sidebarLines,
-            SBPattern.mobLocationPattern,
-            "Tracker Mob Location:",
-        )
-
-        unknownLines = removeSidebarSection(
-            unknownLines,
-            sidebarLines,
-            SBPattern.darkAuctionCurrentItemPattern,
-            "Current Item:",
-        )
+        // da
+        unknownLines = unknownLines.filter {
+            sidebarLines.nextAfter(
+                sidebarLines.firstOrNull { line ->
+                    SBPattern.darkAuctionCurrentItemPattern.matches(line)
+                } ?: "Current Item:",
+            ) != it
+        }
 
         /*
          * Handle broken scoreboard lines
@@ -144,25 +152,6 @@ object UnknownLinesHandler {
                 warn(recentAlarms.first().line, "5 different lines in 5 seconds")
             }
         }
-    }
-
-    private fun removeSidebarSection(
-        unknownLines: List<String>,
-        sidebarLines: List<String>,
-        pattern: Pattern,
-        fallbackHeader: String,
-        linesAfter: Int = 1,
-    ): List<String> {
-        var filtered = unknownLines
-
-        val header = sidebarLines.firstOrNull { pattern.matches(it) } ?: fallbackHeader
-
-        for (i in 1..linesAfter) {
-            val lineToRemove = sidebarLines.nextAfter(header, i)
-            filtered = filtered.filter { it != lineToRemove }
-        }
-
-        return filtered
     }
 
     private fun warn(line: String, reason: String) {

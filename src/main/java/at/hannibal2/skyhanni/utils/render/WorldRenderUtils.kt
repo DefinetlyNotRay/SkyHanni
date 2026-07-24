@@ -24,6 +24,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer
 import io.github.notenoughupdates.moulconfig.ChromaColour
 import net.minecraft.client.Camera
 import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.Font
 import net.minecraft.client.renderer.blockentity.BeaconRenderer
 import net.minecraft.core.Direction
 import net.minecraft.network.chat.Component
@@ -39,34 +40,13 @@ import kotlin.math.sqrt
 //? if >= 26.1 {
 import at.hannibal2.skyhanni.utils.compat.position
 import at.hannibal2.skyhanni.utils.compat.rotation
-import net.minecraft.client.renderer.MultiBufferSource
-import net.minecraft.util.LightCoordsUtil.FULL_BRIGHT
-//?} else {
-/*import net.minecraft.client.renderer.LightTexture.FULL_BRIGHT
-*///?}
+//?}
 
 @Suppress("LargeClass")
 object WorldRenderUtils {
 
     //~ if < 26.1 'entity/beacon/' -> 'entity/'
     private val beaconBeam = createResourceLocation("textures/entity/beacon/beacon_beam.png")
-
-    //? if >= 26.1 {
-    // 26.1 composites entity render targets over the main target after the normal world-render hook.
-    // Drawing see-through text in the late pass prevents entities from covering it (MC-265743).
-    private val deferredSeeThroughText = mutableListOf<(MultiBufferSource.BufferSource) -> Unit>()
-
-    @JvmStatic
-    fun renderDeferredSeeThroughText(bufferSource: MultiBufferSource.BufferSource) {
-        if (deferredSeeThroughText.isEmpty()) return
-        try {
-            deferredSeeThroughText.forEach { it(bufferSource) }
-            bufferSource.endBatch()
-        } finally {
-            deferredSeeThroughText.clear()
-        }
-    }
-    //?}
 
     fun SkyHanniRenderWorldEvent.renderBeaconBeam(vec: LorenzVec, rgb: Int) {
         this.renderBeaconBeam(vec.x, vec.y, vec.z, rgb)
@@ -291,26 +271,6 @@ object WorldRenderUtils {
 
         val x = -fr.width(text) / 2f
 
-        //? if >= 26.1 {
-        if (seeThroughBlocks) {
-            deferredSeeThroughText.add { bufferSource ->
-                fr.drawInBatch(
-                    text,
-                    x,
-                    0f,
-                    color?.rgb ?: LorenzColor.WHITE.toColor().rgb,
-                    shadow,
-                    matrix,
-                    bufferSource,
-                    SEE_THROUGH,
-                    backGroundColor,
-                    FULL_BRIGHT,
-                )
-            }
-            return
-        }
-        //?}
-
         fr.drawInBatch(
             text,
             x,
@@ -319,9 +279,9 @@ object WorldRenderUtils {
             shadow,
             matrix,
             vertexConsumers,
-            if (seeThroughBlocks) SEE_THROUGH else POLYGON_OFFSET,
+            if (seeThroughBlocks) Font.DisplayMode.SEE_THROUGH else Font.DisplayMode.POLYGON_OFFSET,
             backGroundColor,
-            FULL_BRIGHT,
+            15728880,
         )
     }
 
@@ -368,26 +328,6 @@ object WorldRenderUtils {
 
         val x = -fr.width(text) / 2f
 
-        //? if >= 26.1 {
-        if (seeThroughBlocks) {
-            deferredSeeThroughText.add { bufferSource ->
-                fr.drawInBatch(
-                    text,
-                    x,
-                    0f,
-                    color?.rgb ?: LorenzColor.WHITE.toColor().rgb,
-                    shadow,
-                    matrix,
-                    bufferSource,
-                    SEE_THROUGH,
-                    backGroundColor,
-                    FULL_BRIGHT,
-                )
-            }
-            return
-        }
-        //?}
-
         fr.drawInBatch(
             text,
             x,
@@ -396,9 +336,9 @@ object WorldRenderUtils {
             shadow,
             matrix,
             vertexConsumers,
-            if (seeThroughBlocks) SEE_THROUGH else POLYGON_OFFSET,
+            if (seeThroughBlocks) Font.DisplayMode.SEE_THROUGH else Font.DisplayMode.POLYGON_OFFSET,
             backGroundColor,
-            FULL_BRIGHT,
+            15728880,
         )
     }
 

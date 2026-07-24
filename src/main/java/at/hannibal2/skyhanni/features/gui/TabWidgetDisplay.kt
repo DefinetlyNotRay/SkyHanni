@@ -46,18 +46,15 @@ enum class TabWidgetDisplay(
         TabWidget.FAIRY_SOULS,
     ),
     EYES("Eyes placed", TabWidget.EYES_PLACED),
-    // TODO rename to FORAGING_BEACON
-    MOONGLADE_BEACON("Foraging Beacon", TabWidget.MOONGLADE_BEACON),
+    MOONGLADE_BEACON("Moonglade Beacon", TabWidget.MOONGLADE_BEACON),
     STARBORN_TEMPLE("Starborn Temple", TabWidget.STARBORN_TEMPLE),
     SHARD_TRAPS("Shard Traps", TabWidget.SHARD_TRAPS),
-    // TODO rename to WHISPERS
-    FOREST_WHISPERS("Whispers", TabWidget.FOREST_WHISPERS),
+    FOREST_WHISPERS("Forest Whispers", TabWidget.FOREST_WHISPERS),
     AGATHA_CONTEST("Agatha's Contest", TabWidget.AGATHA_CONTEST),
     COMMISSIONS("Mining Commissions", TabWidget.COMMISSIONS),
     SLAYER("Slayer", TabWidget.SLAYER),
     PITY("Pity", TabWidget.PITY),
     PICKAXE_COOLDOWN("Pickaxe Cooldown", TabWidget.PICKAXE_COOLDOWN),
-    MIRIA_CONTEST("Miria's Contest", TabWidget.MIRIA_CONTEST),
     ;
 
     val position get() = config.displayPositions[ordinal]

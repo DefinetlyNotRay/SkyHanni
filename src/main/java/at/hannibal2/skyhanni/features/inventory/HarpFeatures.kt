@@ -19,7 +19,6 @@ import at.hannibal2.skyhanni.utils.RegexUtils.anyMatches
 import at.hannibal2.skyhanni.utils.RegexUtils.matches
 import at.hannibal2.skyhanni.utils.SimpleTimeMark
 import at.hannibal2.skyhanni.utils.compat.ColoredBlockCompat.Companion.isStainedClay
-import at.hannibal2.skyhanni.utils.compat.MinecraftCompat
 import at.hannibal2.skyhanni.utils.compat.container
 import at.hannibal2.skyhanni.utils.compat.formattedTextCompatLeadingWhiteLessResets
 import at.hannibal2.skyhanni.utils.repopatterns.RepoPattern
@@ -108,7 +107,7 @@ object HarpFeatures {
     }
 
     private fun updateScale() {
-        if (MinecraftCompat.screen == null) {
+        if (Minecraft.getInstance().screen == null) {
             DelayedRun.runNextTick {
                 updateScale()
             }

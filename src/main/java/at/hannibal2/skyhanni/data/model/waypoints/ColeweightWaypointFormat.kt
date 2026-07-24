@@ -9,7 +9,6 @@ import com.google.gson.reflect.TypeToken
 
 @AutoService(WaypointFormat::class)
 class ColeweightWaypointFormat : WaypointFormat {
-
     data class ColeweightWaypoint(
         @Expose
         val x: Int,
@@ -41,8 +40,7 @@ class ColeweightWaypointFormat : WaypointFormat {
 
     private fun ColeweightWaypoint.load() = SkyHanniWaypoint(
         LorenzVec(x, y, z),
-        // TODO refactor
-        @Suppress("MapGetWithNotNullAssertionOperator", "UnsafeCallOnNullableType")
+        @Suppress("UnsafeCallOnNullableType")
         options["name"]!!.toInt(),
         options,
     )

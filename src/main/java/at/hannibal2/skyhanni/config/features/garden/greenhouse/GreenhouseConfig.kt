@@ -11,6 +11,15 @@ class GreenhouseConfig {
 
     @Expose
     @ConfigOption(
+        name = "Missing Crop Warning",
+        desc = "Scan Greenhouse plots and warn when one or more unique crops are not planted.",
+    )
+    @ConfigEditorBoolean
+    @FeatureToggle
+    var missingCropWarning: Boolean = true
+
+    @Expose
+    @ConfigOption(
         name = "Growth Cycle Timer",
         desc = "Show a timer for the next growth stage. Open the Crop Diagnostics menu in the Greenhouse to detect the time.",
     )
@@ -51,7 +60,7 @@ class GreenhouseConfig {
     @Expose
     @ConfigOption(
         name = "Phantomleaf Solver",
-        desc = "When harvesting Phantomleaf, highlight the hiding spot in green. §eStand still for best results.",
+        desc = "When harvesting phantomleaf, highlight the hiding spot green. Stand still for best results.",
     )
     @ConfigEditorBoolean
     @FeatureToggle

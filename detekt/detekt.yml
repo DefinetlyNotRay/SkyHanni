@@ -33,6 +33,8 @@ RepoRules:
 
 ImportRules:
     CustomImportOrdering:
+        active: false
+    PreprocessingImportOrdering:
         active: true
 
 SkyHanniStyle:
@@ -81,8 +83,6 @@ style:
     DestructuringDeclarationWithTooManyEntries: # too aggressive
         active: true
         maxDestructuringEntries: 5
-    AbstractClassCanBeConcreteClass: # this is usually intentional
-        active: false
 
 ktlint:
     MaximumLineLength: # ktlint - handled by detekt
@@ -121,7 +121,8 @@ ktlint:
         active: false
     CommentWrapping:
         active: false
-    BinaryExpressionWrapping: # TODO maybe re-evaluate in the future
+    # Todo maybe re-evaluate in the future
+    BinaryExpressionWrapping:
         active: false
     BlankLineBetweenWhenConditions:
         active: false
@@ -189,10 +190,3 @@ potential-bugs:
         active: true
     UnreachableCode:
         active: false
-    IgnoredReturnValue:
-        active: true
-        ignoreFunctionCall:
-            - 'java.util.concurrent.ConcurrentHashMap.put'
-            - 'java.util.concurrent.ConcurrentHashMap.remove'
-            - 'kotlin.collections.MutableMap.put'
-            - 'kotlin.collections.MutableMap.remove'

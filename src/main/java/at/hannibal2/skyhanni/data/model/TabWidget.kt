@@ -351,23 +351,17 @@ enum class TabWidget(
         // language=RegExp
         "Agatha's Contest:.*",
     ),
-    MIRIA_CONTEST(
-        // language=RegExp
-        "Miria's Contest:.*",
-    ),
-    // TODO rename to FORAGING_BEACON
     MOONGLADE_BEACON(
         // language=RegExp
-        "(?<beaconType>\\w+) Beacon: (?<stacks>\\d+) Stacks?",
+        "Moonglade Beacon: (?<stacks>\\d+) Stacks?",
     ),
     SALTS(
         // language=RegExp
         "Salts:",
     ),
-    // TODO rename to WHISPERS
     FOREST_WHISPERS(
         // language=RegExp
-        "(?<whisperType>\\w+) Whispers: (?<amount>.*)",
+        "Forest Whispers: (?<amount>.*)",
     ),
     SHARD_TRAPS(
         // language=RegExp

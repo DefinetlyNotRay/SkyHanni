@@ -1,6 +1,5 @@
 package at.hannibal2.skyhanni.features.garden
 
-import at.hannibal2.skyhanni.events.BlockClickEvent
 import at.hannibal2.skyhanni.utils.ItemUtils.overrideId
 import at.hannibal2.skyhanni.utils.LorenzColor
 import at.hannibal2.skyhanni.utils.LorenzVec
@@ -166,9 +165,6 @@ enum class CropType(
                 else -> null
             }
         }
-
-        fun BlockClickEvent.getCropType(): CropType? =
-            blockState.getCropType(position)
 
         fun getTimeFlower(): CropType {
             val time = MinecraftCompat.serverTime % 24000

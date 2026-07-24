@@ -20,13 +20,6 @@ object ScoreboardEventGalatea : ScoreboardEvent() {
                     .filter { !ScoreboardPattern.footerPattern.matches(it) },
             )
         }
-        ScoreboardPattern.miriasContestPattern.firstMatches(getSBLines())?.let { line ->
-            add(line)
-            addAll(
-                getSBLines().sublistAfter(line, amount = 2)
-                    .filter { !ScoreboardPattern.footerPattern.matches(it) },
-            )
-        }
     }
 
     override val configLine = "§7(All Galatea Lines)"
@@ -35,6 +28,5 @@ object ScoreboardEventGalatea : ScoreboardEvent() {
         ScoreboardPattern.whispersPattern,
         ScoreboardPattern.hotfPattern,
         ScoreboardPattern.agathasContestPattern,
-        ScoreboardPattern.miriasContestPattern,
     )
 }

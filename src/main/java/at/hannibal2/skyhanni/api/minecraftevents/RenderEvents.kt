@@ -16,11 +16,8 @@ import net.minecraft.client.DeltaTracker
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.resources.Identifier
 
-//? if >= 26.1 {
+//~ if < 26.1 'PictureInPictureRendererRegistry' -> 'SpecialGuiElementRegistry'
 import net.fabricmc.fabric.api.client.rendering.v1.PictureInPictureRendererRegistry
-//?} else {
-/*import net.fabricmc.fabric.api.client.rendering.v1.SpecialGuiElementRegistry
-*///?}
 
 @SkyHanniModule
 object RenderEvents {

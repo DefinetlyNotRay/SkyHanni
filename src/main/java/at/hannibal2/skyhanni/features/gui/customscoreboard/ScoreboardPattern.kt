@@ -945,11 +945,10 @@ object ScoreboardPattern {
      * REGEX-TEST: Whispers: §3141§b (+1)
      * REGEX-TEST: Whispers: §317.5k§b (+50)
      * REGEX-TEST: §fWhispers: §317k§b (+40)
-     * REGEX-TEST: §fWhispers: §64.2k§b (+44)
      */
     val whispersPattern by galateaSB.pattern(
         "whispers",
-        "(?:§f)?Whispers: §[36][\\w,.]+.*",
+        "(?:§f)?Whispers: §3[\\w,.]+.*",
     )
 
     /**
@@ -967,14 +966,6 @@ object ScoreboardPattern {
     val agathasContestPattern by galateaSB.pattern(
         "agathas-contest",
         "§eAgatha's Contest §a.*",
-    )
-
-    /**
-     * REGEX-TEST: §eMiria's Contest §a0m35s
-     */
-    val miriasContestPattern by galateaSB.pattern(
-        "mirias-contest",
-        "§eMiria's Contest §a.*",
     )
 
     /**

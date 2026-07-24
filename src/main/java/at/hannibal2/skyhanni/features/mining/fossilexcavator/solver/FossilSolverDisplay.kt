@@ -78,7 +78,7 @@ object FossilSolverDisplay {
     @HandleEvent
     fun onInventoryClose(event: InventoryCloseEvent) = clearData()
 
-    // TODO reshape to a data class, use Resettable
+    // Todo reshape to a data class, use Resettable
     private fun clearData() {
         foundPercentage = false
         percentage = null

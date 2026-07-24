@@ -65,7 +65,6 @@ object SkillApi {
 
     /**
      * REGEX-TEST: +6.3 Foraging (24/750)
-     * REGEX-TEST: +207.2 Hunting (5,183,244/0)
      */
     private val skillMultiplierPattern by patternGroup.pattern(
         "skill.multiplier",
@@ -133,7 +132,7 @@ object SkillApi {
     )
 
     /**
-     * REGEX-TEST: Max Skill level reached!
+     * Regex-TEST: Max Skill level reached!
      */
     private val skillMaxLevelMenuPattern by patternGroup.pattern(
         "skill.menu.maxreached",
@@ -564,7 +563,7 @@ object SkillApi {
         val minus = if (maxXP == 0L) 0 else 1
         val level = getLevelExact(maxXP) - minus
 
-        val levelXP = calculateLevelXP(level - 1).toLong() + currentXP
+        val levelXP = if (maxXP == 0L) currentXP else calculateLevelXP(level - 1).toLong() + currentXP
         val (currentLevel, currentOverflow, currentMaxOverflow, totalOverflow) =
             calculateSkillLevel(levelXP, skillType.maxLevel)
 

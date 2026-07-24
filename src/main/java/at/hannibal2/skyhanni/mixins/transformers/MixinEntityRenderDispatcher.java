@@ -13,11 +13,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 
-//? if >= 26.1 {
+//~ if < 26.1 'state.level.CameraRenderState' -> 'state.CameraRenderState'
 import net.minecraft.client.renderer.state.level.CameraRenderState;
-//?} else {
-/*import net.minecraft.client.renderer.state.CameraRenderState;
- *///?}
 
 @Mixin(EntityRenderDispatcher.class)
 public class MixinEntityRenderDispatcher<E extends Entity, S extends EntityRenderState> {
