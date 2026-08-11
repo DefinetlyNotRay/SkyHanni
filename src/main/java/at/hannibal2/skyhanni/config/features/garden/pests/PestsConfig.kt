@@ -12,6 +12,11 @@ import io.github.notenoughupdates.moulconfig.observer.Property
 
 class PestsConfig {
     @Expose
+    @ConfigOption(name = "Pest Highlights", desc = "")
+    @Accordion
+    val pestHighlights: PestHighlightsConfig = PestHighlightsConfig()
+
+    @Expose
     @ConfigOption(name = "Pest Spawn", desc = "")
     @Accordion
     val pestSpawn: PestSpawnConfig = PestSpawnConfig()
@@ -79,4 +84,3 @@ class PestsConfig {
     @ConfigLink(owner = PestsConfig::class, field = "pestChanceDisplay")
     val pestChanceDisplayPosition: Position = Position(5, -115)
 }
-
