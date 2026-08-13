@@ -17,37 +17,8 @@ object CustomLoadoutKeybinds {
     private data class LoadoutBinding(val slotIndex: Int, val key: Int, val contest: Boolean)
 
     private val config get() = LoadoutApi.config.keybinds
-    private val keybinds
-        get() = listOf(
-            config.slot1,
-            config.slot2,
-            config.slot3,
-            config.slot4,
-            config.slot5,
-            config.slot6,
-            config.slot7,
-            config.slot8,
-            config.slot9,
-            config.slot10,
-            config.slot11,
-            config.slot12,
-        )
-    private val contestKeybinds
-        get() = listOf(
-            config.contestSlot1,
-            config.contestSlot2,
-            config.contestSlot3,
-            config.contestSlot4,
-            config.contestSlot5,
-            config.contestSlot6,
-            config.contestSlot7,
-            config.contestSlot8,
-            config.contestSlot9,
-            config.contestSlot10,
-            config.contestSlot11,
-            config.contestSlot12,
-        )
-    private var waitingForMenuClose = false
+    private val keybinds get() = config.slotKeybinds.asList()
+    private val contestKeybinds get() = config.contestSlotKeybinds.asList()
     private var debugEnabled = false
 
     @HandleEvent
@@ -75,11 +46,6 @@ object CustomLoadoutKeybinds {
 
     private fun handlePress(): Boolean {
         if (!isEnabled()) return false
-        if (waitingForMenuClose) {
-            debug("§cIgnored key press until the loadout menu is closed.")
-            return false
-        }
-
         val slots = LoadoutApi.slots.filter { it.isInCurrentPage() }
         if (config.cycleKey.isKeyHeld()) {
             return cycleLoadout(slots)
@@ -102,7 +68,6 @@ object CustomLoadoutKeybinds {
                     "click sent: §e$clicked",
             )
             if (clicked) {
-                waitingForMenuClose = true
                 return true
             }
         }
@@ -127,7 +92,6 @@ object CustomLoadoutKeybinds {
 
         for (slot in cycle) {
             if (!LoadoutApi.clickSlot(slot)) continue
-            waitingForMenuClose = true
             debug(
                 "§7Cycle key -> contest active: §e${FarmingContestApi.isContestActive}§7, " +
                     "chosen slot: §e${slot.id + 1}",
@@ -136,14 +100,6 @@ object CustomLoadoutKeybinds {
         }
         debug("§cCycle key pressed, but its active order has no available loadouts on this page.")
         return false
-    }
-
-    @HandleEvent
-    private fun onInventoryClose() {
-        if (waitingForMenuClose) {
-            waitingForMenuClose = false
-            debug("§7Loadout menu closed; cycle key unlocked.")
-        }
     }
 
     fun allowMouseClick() = isEnabled() && (
@@ -164,7 +120,7 @@ object CustomLoadoutKeybinds {
     }
 
     private fun debug(message: String) {
-        if (debugEnabled) ChatUtils.chat("§8[Loadout Debug] $message")
+        if (debugEnabled) ChatUtils.debug("Loadout keybinds: $message")
     }
 
     private fun isEnabled() = SkyBlockUtils.inSkyBlock && LoadoutApi.inLoadouts() && config.slotKeybindsToggle
