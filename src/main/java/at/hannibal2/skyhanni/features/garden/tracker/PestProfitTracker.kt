@@ -106,7 +106,7 @@ object PestProfitTracker : SkyHanniBucketedItemTracker<PestType, PestProfitTrack
     private val rareCropPestDrops by lazy {
         RareCropTracker.RareCropDropType.entries
             .filter { it.canDropFromPests }
-            .mapTo(mutableSetOf()) { NeuInternalName.fromItemNameOrInternalName(it.dropName) }
+            .mapTo(mutableSetOf()) { NeuInternalName.fromItemNameOrInternalName(it.cleanName) }
     }
 
     private val noMessageDrops = setOf(
@@ -176,7 +176,7 @@ object PestProfitTracker : SkyHanniBucketedItemTracker<PestType, PestProfitTrack
         if (!drop.canDropFromPests) return
         if (!PestApi.hasVacuumOrLassoInHand()) return
 
-        val internalName = NeuInternalName.fromItemNameOrInternalName(drop.dropName)
+        val internalName = NeuInternalName.fromItemNameOrInternalName(drop.cleanName)
         PestItemDropEvent(internalName, 1).post()
         addItem(drop.pestType ?: PestType.UNKNOWN, internalName, 1, command = false)
     }
