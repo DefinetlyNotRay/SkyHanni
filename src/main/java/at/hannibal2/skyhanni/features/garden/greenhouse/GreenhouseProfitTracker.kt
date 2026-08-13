@@ -35,6 +35,9 @@ object GreenhouseProfitTracker {
     private val config get() = SkyHanniMod.feature.garden.greenhouse.profitTracker
     private var wasTracking = false
     private val pendingPestDrops = mutableMapOf<NeuInternalName, PendingPestDrop>()
+    private val pendingItemAdds = mutableListOf<ItemAddEvent>()
+    private val inventoryCropCredits = mutableMapOf<NeuInternalName, Long>()
+    private var itemAddFlushScheduled = false
     private val rareCropDrops by lazy {
         RareCropTracker.RareCropDropType.entries.mapTo(mutableSetOf()) {
             NeuInternalName.fromItemNameOrInternalName(it.cleanName)
@@ -77,12 +80,45 @@ object GreenhouseProfitTracker {
         if (!isEnabled()) return
 
         if (event.source != ItemAddManager.Source.COMMAND) {
-            DelayedRun.runDelayed(PEST_ATTRIBUTION_WINDOW, "Greenhouse pest attribution") {
-                processItemAdd(event)
+            pendingItemAdds.add(event)
+            if (!itemAddFlushScheduled) {
+                itemAddFlushScheduled = true
+                DelayedRun.runDelayed(PEST_ATTRIBUTION_WINDOW, "Greenhouse item attribution") {
+                    flushPendingItemAdds()
+                }
             }
             return
         }
         processItemAdd(event)
+    }
+
+    private fun flushPendingItemAdds() {
+        itemAddFlushScheduled = false
+        val events = pendingItemAdds.toList()
+        pendingItemAdds.clear()
+
+        events.filter { it.source == ItemAddManager.Source.ITEM_ADD && isHarvestDrop(it.internalName) }.forEach { event ->
+            val primitive = NeuItems.getPrimitiveMultiplier(event.internalName)
+            val amount = primitive.amount.toLong() * event.amount
+            inventoryCropCredits[primitive.internalName] = (inventoryCropCredits[primitive.internalName] ?: 0) + amount
+        }
+
+        for (event in events) {
+            if (event.source != ItemAddManager.Source.SACKS) {
+                processItemAdd(event)
+                continue
+            }
+
+            val primitive = NeuItems.getPrimitiveMultiplier(event.internalName)
+            val primitivePerItem = primitive.amount.toLong()
+            val cropCredit = inventoryCropCredits[primitive.internalName] ?: 0
+            val duplicatedAmount = minOf(event.amount.toLong(), cropCredit / primitivePerItem).toInt()
+            inventoryCropCredits[primitive.internalName] = cropCredit - duplicatedAmount * primitivePerItem
+            val uniqueAmount = event.amount - duplicatedAmount
+            if (uniqueAmount > 0) {
+                processItemAdd(ItemAddEvent(event.internalName, uniqueAmount, event.source))
+            }
+        }
     }
 
     private fun processItemAdd(event: ItemAddEvent) {
@@ -140,13 +176,22 @@ object GreenhouseProfitTracker {
         val tracking = isEnabled()
         if (tracking == wasTracking) return
         wasTracking = tracking
-        if (tracking) tracker.startSessionUptime() else tracker.pauseSessionUptime()
+        if (tracking) {
+            tracker.startSessionUptime()
+        } else {
+            pendingItemAdds.clear()
+            inventoryCropCredits.clear()
+            tracker.pauseSessionUptime()
+        }
     }
 
     @HandleEvent
     private fun onWorldChange() {
         wasTracking = false
         pendingPestDrops.clear()
+        pendingItemAdds.clear()
+        inventoryCropCredits.clear()
+        itemAddFlushScheduled = false
         tracker.pauseSessionUptime()
     }
 
