@@ -8,15 +8,15 @@ import at.hannibal2.skyhanni.data.IslandType
 import at.hannibal2.skyhanni.data.ItemAddManager
 import at.hannibal2.skyhanni.data.garden.CropCollectionApi.addCollectionCounter
 import at.hannibal2.skyhanni.events.ItemAddEvent
-import at.hannibal2.skyhanni.events.garden.pests.PestKillEvent
+import at.hannibal2.skyhanni.events.garden.farming.CropClickEvent
+import at.hannibal2.skyhanni.events.garden.pests.PestItemDropEvent
 import at.hannibal2.skyhanni.events.minecraft.SkyHanniTickEvent
 import at.hannibal2.skyhanni.features.garden.CropCollectionType
 import at.hannibal2.skyhanni.features.garden.CropType
-import at.hannibal2.skyhanni.features.garden.pests.PestApi
-import at.hannibal2.skyhanni.features.garden.tracker.PestProfitTracker
 import at.hannibal2.skyhanni.skyhannimodule.SkyHanniModule
 import at.hannibal2.skyhanni.utils.DelayedRun
 import at.hannibal2.skyhanni.utils.ItemUtils.itemNameWithoutColor
+import at.hannibal2.skyhanni.utils.NeuInternalName
 import at.hannibal2.skyhanni.utils.NeuItems
 import at.hannibal2.skyhanni.utils.NumberUtil.addSeparators
 import at.hannibal2.skyhanni.utils.SimpleTimeMark
@@ -30,10 +30,15 @@ import kotlin.time.Duration.Companion.seconds
 
 @SkyHanniModule
 object GreenhouseProfitTracker {
-    private val PEST_SACK_BATCH_WINDOW = 6.seconds
+    private val ITEM_ADD_HARVEST_WINDOW = 1.seconds
+    private val SACK_BATCH_WINDOW = 6.seconds
+    private val PEST_DROP_EXPIRY = 10.seconds
     private val config get() = SkyHanniMod.feature.garden.greenhouse.profitTracker
     private var wasTracking = false
-    private var lastPestKill = SimpleTimeMark.farPast()
+    private var lastCropClick = SimpleTimeMark.farPast()
+    private val pendingPestDrops = mutableMapOf<NeuInternalName, PendingPestDrop>()
+
+    private data class PendingPestDrop(var amount: Int, val detectedAt: SimpleTimeMark)
 
     private val tracker = SkyHanniItemTracker(
         "Greenhouse Profit Tracker",
@@ -68,7 +73,7 @@ object GreenhouseProfitTracker {
     private fun onItemAdd(event: ItemAddEvent) {
         if (!isEnabled()) return
 
-        if (event.source == ItemAddManager.Source.SACKS) {
+        if (event.source != ItemAddManager.Source.COMMAND) {
             DelayedRun.runNextTickEnd { processItemAdd(event) }
             return
         }
@@ -76,32 +81,57 @@ object GreenhouseProfitTracker {
     }
 
     private fun processItemAdd(event: ItemAddEvent) {
-        if (event.source != ItemAddManager.Source.COMMAND && isPestDrop(event)) return
+        if (event.source != ItemAddManager.Source.COMMAND && !isRecentHarvest(event.source)) return
+        val pestAmount = if (event.source == ItemAddManager.Source.COMMAND) 0 else consumePestDrops(event)
+        val greenhouseAmount = event.amount - pestAmount
+        if (greenhouseAmount <= 0) return
 
-        with(tracker) { event.addItemFromEvent() }
+        val greenhouseEvent = if (greenhouseAmount == event.amount) event else {
+            ItemAddEvent(event.internalName, greenhouseAmount, event.source)
+        }
+
+        with(tracker) { greenhouseEvent.addItemFromEvent() }
         if (event.source == ItemAddManager.Source.COMMAND) return
 
         tracker.modify { it.pickups++ }
-        addToGreenhouseCollection(event)
+        addToGreenhouseCollection(greenhouseEvent)
+    }
+
+    private fun isRecentHarvest(source: ItemAddManager.Source): Boolean {
+        val window = if (source == ItemAddManager.Source.SACKS) SACK_BATCH_WINDOW else ITEM_ADD_HARVEST_WINDOW
+        return lastCropClick.passedSince() < window
+    }
+
+    @HandleEvent(CropClickEvent::class, onlyOnIsland = IslandType.GARDEN)
+    private fun onCropClick() {
+        if (!isEnabled()) return
+        lastCropClick = SimpleTimeMark.now()
+    }
+
+    @HandleEvent(onlyOnIsland = IslandType.GARDEN)
+    private fun onPestItemDrop(event: PestItemDropEvent) {
+        if (!isEnabled()) return
+        val pending = pendingPestDrops[event.internalName]
+        if (pending == null || pending.detectedAt.passedSince() >= PEST_DROP_EXPIRY) {
+            pendingPestDrops[event.internalName] = PendingPestDrop(event.amount, SimpleTimeMark.now())
+        } else {
+            pending.amount += event.amount
+        }
+    }
+
+    private fun consumePestDrops(event: ItemAddEvent): Int {
+        pendingPestDrops.entries.removeIf { it.value.detectedAt.passedSince() >= PEST_DROP_EXPIRY }
+        val pending = pendingPestDrops[event.internalName] ?: return 0
+        val consumed = minOf(event.amount, pending.amount)
+        pending.amount -= consumed
+        if (pending.amount <= 0) pendingPestDrops.remove(event.internalName)
+        return consumed
     }
 
     private fun addToGreenhouseCollection(event: ItemAddEvent) {
         val primitiveStack = NeuItems.getPrimitiveMultiplier(event.internalName)
         val crop = CropType.getByNameOrNull(primitiveStack.internalName.itemNameWithoutColor) ?: return
         crop.addCollectionCounter(CropCollectionType.GREENHOUSE, primitiveStack.amount.toLong() * event.amount)
-    }
-
-    private fun isPestDrop(event: ItemAddEvent): Boolean {
-        val recentlyUsedPestTool = PestApi.hasVacuumOrLassoInHand() ||
-            PestApi.lastTimeVacuumHeld.passedSince() < PEST_SACK_BATCH_WINDOW ||
-            PestApi.lastTimeLassoHeld.passedSince() < PEST_SACK_BATCH_WINDOW
-        return PestProfitTracker.isPestDropItem(event.internalName) &&
-            (recentlyUsedPestTool || lastPestKill.passedSince() < 3.seconds)
-    }
-
-    @HandleEvent(PestKillEvent::class)
-    private fun onPestKill() {
-        lastPestKill = SimpleTimeMark.now()
     }
 
     @HandleEvent(onlyOnIsland = IslandType.GARDEN)
@@ -116,7 +146,8 @@ object GreenhouseProfitTracker {
     @HandleEvent
     private fun onWorldChange() {
         wasTracking = false
-        lastPestKill = SimpleTimeMark.farPast()
+        lastCropClick = SimpleTimeMark.farPast()
+        pendingPestDrops.clear()
         tracker.pauseSessionUptime()
     }
 
