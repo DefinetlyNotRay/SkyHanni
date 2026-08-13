@@ -19,6 +19,7 @@ import at.hannibal2.skyhanni.events.PurseChangeCause
 import at.hannibal2.skyhanni.events.PurseChangeEvent
 import at.hannibal2.skyhanni.events.chat.SkyHanniChatEvent
 import at.hannibal2.skyhanni.events.garden.pests.PestKillEvent
+import at.hannibal2.skyhanni.events.garden.pests.PestItemDropEvent
 import at.hannibal2.skyhanni.events.item.ShardGainEvent
 import at.hannibal2.skyhanni.features.garden.CropCollectionType
 import at.hannibal2.skyhanni.features.garden.CropType
@@ -105,7 +106,7 @@ object PestProfitTracker : SkyHanniBucketedItemTracker<PestType, PestProfitTrack
     private val rareCropPestDrops by lazy {
         RareCropTracker.RareCropDropType.entries
             .filter { it.canDropFromPests }
-            .mapTo(mutableSetOf()) { NeuInternalName.fromItemNameOrInternalName(it.dropName) }
+            .mapTo(mutableSetOf()) { NeuInternalName.fromItemNameOrInternalName(it.cleanName) }
     }
 
     private val noMessageDrops = setOf(
@@ -175,7 +176,8 @@ object PestProfitTracker : SkyHanniBucketedItemTracker<PestType, PestProfitTrack
         if (!drop.canDropFromPests) return
         if (!PestApi.hasVacuumOrLassoInHand()) return
 
-        val internalName = NeuInternalName.fromItemNameOrInternalName(drop.dropName)
+        val internalName = NeuInternalName.fromItemNameOrInternalName(drop.cleanName)
+        PestItemDropEvent(internalName, 1).post()
         addItem(drop.pestType ?: PestType.UNKNOWN, internalName, 1, command = false)
     }
 
@@ -191,6 +193,7 @@ object PestProfitTracker : SkyHanniBucketedItemTracker<PestType, PestProfitTrack
             PestApi.hasVacuumOrLassoInHand()
         ) {
             val pest = PestType.getByItemInternalNameOrNull(event.internalName) ?: return
+            PestItemDropEvent(event.internalName, event.amount).post()
             addItem(pest, event.internalName, event.amount, false)
         }
     }
@@ -223,6 +226,7 @@ object PestProfitTracker : SkyHanniBucketedItemTracker<PestType, PestProfitTrack
             )
             val internalName = NeuInternalName.fromItemNameOrNull(group("item")) ?: return
             val amount = group("amount").toInt()
+            PestItemDropEvent(internalName, amount).post()
 
             val primitiveStack = NeuItems.getPrimitiveMultiplier(internalName)
             val rawName = primitiveStack.internalName.itemNameWithoutColor
@@ -249,6 +253,7 @@ object PestProfitTracker : SkyHanniBucketedItemTracker<PestType, PestProfitTrack
             val internalName = NeuInternalName.fromItemNameOrNull(itemGroup) ?: return
             val pest = PestType.getByItemInternalNameOrNull(internalName) ?: return@matchMatcher
             val amount = groupOrNull("amount")?.toIntOrNull() ?: 1
+            PestItemDropEvent(internalName, amount).post()
 
             addItem(pest, internalName, amount, command = false)
 
@@ -264,6 +269,7 @@ object PestProfitTracker : SkyHanniBucketedItemTracker<PestType, PestProfitTrack
     @HandleEvent(onlyOnIsland = IslandType.GARDEN)
     fun onShardGain(event: ShardGainEvent) {
         if (event.shardInternalName != PEST_SHARD) return
+        PestItemDropEvent(PEST_SHARD, event.amount).post()
         addItem(PestType.UNKNOWN, PEST_SHARD, event.amount, command = false)
     }
 
