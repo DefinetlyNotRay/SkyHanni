@@ -43,8 +43,7 @@ class PestHighlightsConfig {
     @Expose
     @ConfigOption(
         name = "Etherwarp Pest Target",
-        desc = "Suggests a reachable Etherwarp landing block near the largest group of visible pests. " +
-            "You must aim, sneak, and right-click manually.",
+        desc = "Suggest a reachable Etherwarp landing block near the largest group of visible pests.",
     )
     @ConfigEditorBoolean
     @FeatureToggle
