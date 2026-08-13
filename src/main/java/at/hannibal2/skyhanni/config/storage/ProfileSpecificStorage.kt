@@ -670,6 +670,7 @@ class ProfileSpecificStorage(
 
         class GreenHouseStorage(
             @Expose var nextCycle: SimpleTimeMark = farPast(),
+            @Expose var profitTracker: GreenhouseProfitTracker.Data? = GreenhouseProfitTracker.Data(),
             @Expose var detectedCropsByPlot: MutableMap<Int, MutableSet<String>>? = mutableMapOf(),
             @Expose
             var detectedCropPositionsByPlot: MutableMap<Int, MutableMap<String, LorenzVec>>? = mutableMapOf(),
@@ -682,6 +683,9 @@ class ProfileSpecificStorage(
             @Expose
             var activeMutationBlueprintByPlot: MutableMap<Int, String>? = mutableMapOf(),
         ) {
+            fun getOrCreateProfitTracker(): GreenhouseProfitTracker.Data =
+                profitTracker ?: GreenhouseProfitTracker.Data().also { profitTracker = it }
+
             class MutationBlueprintStorage(
                 @Expose var minXOffset: Int = 0,
                 @Expose var minZOffset: Int = 0,
