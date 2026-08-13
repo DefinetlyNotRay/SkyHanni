@@ -3,39 +3,11 @@ package at.hannibal2.skyhanni.config.features.garden.greenhouse
 import at.hannibal2.skyhanni.config.FeatureToggle
 import at.hannibal2.skyhanni.config.core.config.Position
 import com.google.gson.annotations.Expose
-import io.github.notenoughupdates.moulconfig.annotations.Accordion
 import io.github.notenoughupdates.moulconfig.annotations.ConfigEditorBoolean
 import io.github.notenoughupdates.moulconfig.annotations.ConfigLink
 import io.github.notenoughupdates.moulconfig.annotations.ConfigOption
 
 class GreenhouseConfig {
-
-    @Expose
-    @ConfigOption(name = "Profit Tracker", desc = "")
-    @Accordion
-    val profitTracker: GreenhouseProfitTrackerConfig = GreenhouseProfitTrackerConfig()
-
-    @Expose
-    @ConfigOption(
-        name = "Missing Crop Warning",
-        desc = "Scan Greenhouse plots and warn when one or more unique crops are not planted.",
-    )
-    @ConfigEditorBoolean
-    @FeatureToggle
-    var missingCropWarning: Boolean = true
-
-    @Expose
-    @ConfigOption(
-        name = "Mutation Blueprint",
-        desc = "Save and load Greenhouse layouts, then show shadows where mutations disappear. " +
-            "Use /shgreenhouseblueprint to open the layout library.",
-    )
-    @ConfigEditorBoolean
-    @FeatureToggle
-    var mutationBlueprint: Boolean = true
-
-    @Expose
-    var useDiagnosticCropPositionFinder: Boolean = true
 
     @Expose
     @ConfigOption(
