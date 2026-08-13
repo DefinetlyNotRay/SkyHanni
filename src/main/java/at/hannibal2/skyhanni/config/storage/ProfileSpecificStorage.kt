@@ -792,6 +792,17 @@ class ProfileSpecificStorage(
         var riftSlots: MutableList<SafeItemStack?> = CurrentEquipmentApi.getEmptyEquipment()
     }
 
+    @Expose
+    var bazaarOrders: BazaarOrdersStorage = BazaarOrdersStorage()
+
+    class BazaarOrdersStorage {
+        @Expose
+        var buyOrders: MutableMap<NeuInternalName, Int> = mutableMapOf()
+
+        @Expose
+        var sellOffers: MutableMap<NeuInternalName, Int> = mutableMapOf()
+    }
+
     // - foraging
     @Expose
     val foraging: ForagingStorage = ForagingStorage()
