@@ -2,100 +2,34 @@ package at.hannibal2.skyhanni.features.garden.greenhouse
 
 import at.hannibal2.skyhanni.features.garden.plot.GardenPlot
 import at.hannibal2.skyhanni.utils.BlockUtils.getBlockStateAt
-import at.hannibal2.skyhanni.utils.BlockUtils.isInLoadedChunk
-import at.hannibal2.skyhanni.utils.EntityUtils.getEntitiesInBoundingBox
 import at.hannibal2.skyhanni.utils.EntityUtils.getEntitiesInBox
 import at.hannibal2.skyhanni.utils.ItemUtils.cleanName
 import at.hannibal2.skyhanni.utils.LorenzVec
 import at.hannibal2.skyhanni.utils.SafeItemStack
 import at.hannibal2.skyhanni.utils.compat.EntityCompat.getHandItem
 import at.hannibal2.skyhanni.utils.compat.EntityCompat.getStandHelmet
-import at.hannibal2.skyhanni.utils.compat.MinecraftCompat
 import at.hannibal2.skyhanni.utils.getLorenzVec
 import at.hannibal2.skyhanni.utils.itemType
-import at.hannibal2.skyhanni.utils.toLorenzVec
-import net.minecraft.core.BlockPos
 import net.minecraft.world.entity.Display
 import net.minecraft.world.entity.decoration.ArmorStand
 import net.minecraft.world.item.Items
 import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.Blocks
-import net.minecraft.world.phys.AABB
 import kotlin.math.abs
 
 internal object GreenhouseCropScanner {
 
-    fun findNearbyCropPosition(category: CropCategory, center: LorenzVec): LorenzVec? {
-        val world = MinecraftCompat.localWorldOrNull ?: return null
-        if (category in headOnlyCrops) return findNearbyFloatingCropHead(category, center)
+    fun scanGreenhouse(plot: GardenPlot): Set<CropCategory> = scanGreenhousePositions(plot).keys
 
-        val centerPos = center.toBlockPos()
-        // Crop Diagnostics can open when the player right-clicks the farmland below a crop.
-        // Prefer the clicked block and the block directly above it before searching the surrounding
-        // mutation. Otherwise decorative blocks of the same crop type can steal the diagnosed position.
-        listOf(centerPos, centerPos.above()).firstOrNull {
-            CropCategory.fromBlock(world.getBlockState(it).block) == category
-        }?.let { return it.toLorenzVec() }
+    fun scanGreenhousePositions(plot: GardenPlot): Map<CropCategory, LorenzVec> =
+        GreenhouseGridScanner.scan(plot).cropPositions
 
-        val from = centerPos.offset(-DIAGNOSTIC_SEARCH_RADIUS, -DIAGNOSTIC_SEARCH_RADIUS, -DIAGNOSTIC_SEARCH_RADIUS)
-        val to = centerPos.offset(DIAGNOSTIC_SEARCH_RADIUS, DIAGNOSTIC_SEARCH_RADIUS, DIAGNOSTIC_SEARCH_RADIUS)
-        return BlockPos.betweenClosed(from, to)
-            .filter { CropCategory.fromBlock(world.getBlockState(it).block) == category }
-            .minByOrNull { it.distSqr(centerPos) }
-            ?.toLorenzVec()
-    }
-
-    fun scanGreenhouse(plot: GardenPlot): Set<CropCategory> =
-        scanGreenhousePositions(plot).keys
-
-    fun scanGreenhousePositions(plot: GardenPlot): Map<CropCategory, LorenzVec> {
-        val world = MinecraftCompat.localWorldOrNull ?: return emptyMap()
-        val middle = plot.middle.toBlockPos()
-        val from = BlockPos(middle.x - SCAN_RADIUS, MIN_GARDEN_Y, middle.z - SCAN_RADIUS)
-        val to = BlockPos(middle.x + SCAN_RADIUS, MAX_GARDEN_Y, middle.z + SCAN_RADIUS)
-        return buildMap {
-            for (pos in BlockPos.betweenClosed(from, to)) {
-                val block = world.getBlockState(pos).block
-                CropCategory.fromBlock(block)?.let {
-                    if (it !in headOnlyCrops) putIfAbsent(it, pos.toLorenzVec())
-                }
-                if (size == CropCategory.entries.size) return@buildMap
-            }
-            scanFloatingCropHeads(
-                AABB(
-                    from.x.toDouble(),
-                    from.y.toDouble(),
-                    from.z.toDouble(),
-                    (to.x + 1).toDouble(),
-                    (to.y + 1).toDouble(),
-                    (to.z + 1).toDouble(),
-                ),
-            )
-        }
-    }
-
-    fun isCompleteScanAreaLoaded(plot: GardenPlot): Boolean {
-        val middle = plot.middle
-        return listOf(
-            middle.add(x = -SCAN_RADIUS, z = -SCAN_RADIUS),
-            middle.add(x = -SCAN_RADIUS, z = SCAN_RADIUS),
-            middle.add(x = SCAN_RADIUS, z = -SCAN_RADIUS),
-            middle.add(x = SCAN_RADIUS, z = SCAN_RADIUS),
-        ).all { it.isInLoadedChunk() }
-    }
+    fun isCompleteScanAreaLoaded(plot: GardenPlot): Boolean = GreenhouseGridScanner.isLoaded(plot)
 
     fun isMissingCrop(position: LorenzVec, category: CropCategory): Boolean {
         val state = position.getBlockStateAt()
         return when {
             state.block in deadCropBlocks -> true
-
-            // Crop Diagnostics supplies the identity for crops that can use custom backing blocks.
-            category in diagnosticOnlyCrops -> {
-                val hasNearbyCrop = findNearbyCropPosition(category, position) != null
-                val hasFloatingHead = category in floatingHeadCrops &&
-                    position.hasFloatingHeadAtCropPosition(category)
-                !hasNearbyCrop && !hasFloatingHead
-            }
 
             category in floatingHeadCrops && position.hasFloatingHeadAtCropPosition(category) -> false
 
@@ -123,6 +57,33 @@ internal object GreenhouseCropScanner {
         return null
     }
 
+    /**
+     * Finds a crop represented by its own named head, even when its grid cell is also covered by a mutation.
+     * Mutation models can contain crop-like blocks, so this deliberately accepts only heads which are not
+     * themselves recognised as mutation items.
+     */
+    fun independentCropHeadIdAt(position: LorenzVec): String? {
+        fun SafeItemStack?.independentCropId(): String? {
+            if (GreenhouseMutation.fromItem(this) != null) return null
+            return skyShardsCropId()
+        }
+
+        getEntitiesInBox<ArmorStand>(position, FLOATING_CROP_ID_SEARCH_RADIUS) { stand ->
+            abs(stand.x - position.x) <= FLOATING_HEAD_HORIZONTAL_RADIUS &&
+                abs(stand.z - position.z) <= FLOATING_HEAD_HORIZONTAL_RADIUS
+        }.forEach { stand ->
+            listOf(stand.getStandHelmet(), stand.getHandItem()).firstNotNullOfOrNull { it.independentCropId() }
+                ?.let { return it }
+        }
+        getEntitiesInBox<Display.ItemDisplay>(position, FLOATING_CROP_ID_SEARCH_RADIUS) { display ->
+            abs(display.x - position.x) <= FLOATING_HEAD_HORIZONTAL_RADIUS &&
+                abs(display.z - position.z) <= FLOATING_HEAD_HORIZONTAL_RADIUS
+        }.forEach { display ->
+            display.itemStack.independentCropId()?.let { return it }
+        }
+        return null
+    }
+
     private fun findNearbyFloatingCropHead(category: CropCategory, center: LorenzVec): LorenzVec? = buildList {
         getEntitiesInBox<ArmorStand>(center, FLOATING_HEAD_SEARCH_RADIUS) { stand ->
             listOf(stand.getStandHelmet(), stand.getHandItem()).any { it.isFloatingCropHead(category) }
@@ -131,19 +92,6 @@ internal object GreenhouseCropScanner {
             it.itemStack.isFloatingCropHead(category)
         }.mapTo(this) { it.getLorenzVec() }
     }.minByOrNull { it.distanceSq(center) }
-
-    private fun MutableMap<CropCategory, LorenzVec>.scanFloatingCropHeads(scanArea: AABB) {
-        getEntitiesInBoundingBox<ArmorStand>(scanArea).forEach { stand ->
-            listOf(stand.getStandHelmet(), stand.getHandItem())
-                .firstNotNullOfOrNull { it.floatingCropHeadCategory() }
-                ?.let { this[it] = stand.getLorenzVec() }
-        }
-        getEntitiesInBoundingBox<Display.ItemDisplay>(scanArea).forEach { display ->
-            display.itemStack.floatingCropHeadCategory()?.let {
-                this[it] = display.getLorenzVec()
-            }
-        }
-    }
 
     /**
      * Hypixel sometimes renders Greenhouse crops such as cactus and moonflower as floating player heads.
@@ -224,7 +172,6 @@ internal object GreenhouseCropScanner {
     }
 
     private val deadCropBlocks = setOf(Blocks.DEAD_BUSH, Blocks.CHORUS_PLANT, Blocks.CHORUS_FLOWER)
-    private val diagnosticOnlyCrops = setOf(CropCategory.PUMPKIN, CropCategory.COCOA_BEANS)
     private val variableHeightCrops = setOf(CropCategory.CACTUS, CropCategory.SUGAR_CANE)
     private val floatingHeadCrops = setOf(
         CropCategory.CACTUS,
@@ -240,10 +187,6 @@ internal object GreenhouseCropScanner {
     )
     private val playerHeadBlocks = setOf(Blocks.PLAYER_HEAD, Blocks.PLAYER_WALL_HEAD)
 
-    private const val SCAN_RADIUS = 8
-    private const val MIN_GARDEN_Y = 60
-    private const val MAX_GARDEN_Y = 100
-    private const val DIAGNOSTIC_SEARCH_RADIUS = 2
     private const val VARIABLE_HEIGHT_SEARCH_RADIUS = 2
     private const val FLOATING_HEAD_SEARCH_RADIUS = 2.5
     private const val FLOATING_CROP_ID_SEARCH_RADIUS = 3.0
@@ -281,6 +224,22 @@ internal enum class CropCategory(
         fun fromStorageName(name: String): CropCategory? = entries.firstOrNull { it.name == name }
         fun fromDisplayName(name: String): CropCategory? = entries.firstOrNull {
             name == it.displayName || name in it.itemNames
+        }
+
+        fun fromCropId(cropId: String): CropCategory? = when (cropId.lowercase()) {
+            "wheat" -> WHEAT
+            "potato" -> POTATO
+            "carrot" -> CARROT
+            "pumpkin" -> PUMPKIN
+            "melon" -> MELON
+            "cocoa_beans" -> COCOA_BEANS
+            "sugar_cane" -> SUGAR_CANE
+            "cactus" -> CACTUS
+            "nether_wart" -> NETHER_WART
+            "red_mushroom", "brown_mushroom" -> MUSHROOM
+            "moonflower", "sunflower" -> SUNFLOWER
+            "wild_rose" -> WILD_ROSE
+            else -> null
         }
     }
 }
