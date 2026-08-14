@@ -8,6 +8,7 @@ import at.hannibal2.skyhanni.data.IslandType
 import at.hannibal2.skyhanni.data.ItemAddManager
 import at.hannibal2.skyhanni.data.garden.CropCollectionApi.addCollectionCounter
 import at.hannibal2.skyhanni.events.ItemAddEvent
+import at.hannibal2.skyhanni.events.MobEvent
 import at.hannibal2.skyhanni.events.entity.EntityClickEvent
 import at.hannibal2.skyhanni.events.entity.EntityDeathEvent
 import at.hannibal2.skyhanni.events.garden.pests.PestKillEvent
@@ -25,6 +26,8 @@ import at.hannibal2.skyhanni.utils.NeuInternalName
 import at.hannibal2.skyhanni.utils.NeuInternalName.Companion.toInternalName
 import at.hannibal2.skyhanni.utils.NeuItems
 import at.hannibal2.skyhanni.utils.NumberUtil.addSeparators
+import at.hannibal2.skyhanni.utils.RegexUtils.matches
+import at.hannibal2.skyhanni.utils.repopatterns.RepoPattern
 import at.hannibal2.skyhanni.utils.SimpleTimeMark
 import at.hannibal2.skyhanni.utils.collection.RenderableCollectionUtils.addSearchString
 import at.hannibal2.skyhanni.utils.renderables.Searchable
@@ -32,26 +35,32 @@ import at.hannibal2.skyhanni.utils.tracker.ItemTrackerData
 import at.hannibal2.skyhanni.utils.tracker.SessionUptime
 import at.hannibal2.skyhanni.utils.tracker.SkyHanniItemTracker
 import com.google.gson.annotations.Expose
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 @SkyHanniModule
 object GreenhouseProfitTracker {
+    private val patternGroup = RepoPattern.group("garden.greenhouse.profittracker")
+
+    /**
+     * REGEX-TEST: Timestalk Clone
+     * REGEX-TEST: Zombuddy
+     */
+    private val mutationMobNamePattern by patternGroup.pattern(
+        "mutationmob.name.colorless",
+        "(?:Timestalk Clone|Zombuddy)",
+    )
+
     private val PEST_ATTRIBUTION_WINDOW = 1.seconds
     private val PEST_DROP_EXPIRY = 10.seconds
     private val PEST_KILL_DROP_WINDOW = 3.seconds
     private val MUTATION_MOB_DROP_EXPIRY = 5.seconds
-    private val TIMESTALK = "TIMESTALK".toInternalName()
-    private val ZOMBUD = "ZOMBUD".toInternalName()
-    private val mutationMobDrops = mapOf(
-        "Timestalk Clone" to TIMESTALK,
-        "Zombuddy" to ZOMBUD,
-    )
     private val config get() = SkyHanniMod.feature.garden.greenhouse.profitTracker
     private var wasTracking = false
     private var lastPestKill = SimpleTimeMark.farPast()
-    private val pendingPestDrops = mutableMapOf<NeuInternalName, PendingPestDrop>()
+    private val pendingPestDrops = TimedDropCredits(PEST_DROP_EXPIRY)
     private val attackedMutationMobs = mutableSetOf<Int>()
-    private val pendingMutationMobDrops = mutableMapOf<NeuInternalName, PendingMutationMobDrop>()
+    private val pendingMutationMobDrops = TimedDropCredits(MUTATION_MOB_DROP_EXPIRY)
     private val pendingItemAdds = mutableListOf<ItemAddEvent>()
     private val inventoryCropCredits = mutableMapOf<NeuInternalName, Long>()
     private var itemAddFlushScheduled = false
@@ -61,9 +70,47 @@ object GreenhouseProfitTracker {
         }
     }
 
-    private data class PendingPestDrop(var amount: Int, val detectedAt: SimpleTimeMark)
+    private enum class MutationMobDrop(val mobName: String, val internalName: NeuInternalName) {
+        TIMESTALK_CLONE("Timestalk Clone", "TIMESTALK".toInternalName()),
+        ZOMBUDDY("Zombuddy", "ZOMBUD".toInternalName()),
+        ;
 
-    private data class PendingMutationMobDrop(var amount: Int, val detectedAt: SimpleTimeMark)
+        companion object {
+            private val byMobName = entries.associateBy { it.mobName }
+            private val internalNames = entries.mapTo(mutableSetOf()) { it.internalName }
+
+            fun getByMobName(name: String): MutationMobDrop? = byMobName[name]
+            fun isDrop(internalName: NeuInternalName): Boolean = internalName in internalNames
+        }
+    }
+
+    private class TimedDropCredits(private val expiry: Duration) {
+        private data class Credit(var amount: Int, val detectedAt: SimpleTimeMark)
+
+        private val credits = mutableMapOf<NeuInternalName, Credit>()
+
+        fun add(internalName: NeuInternalName, amount: Int) {
+            val current = credits[internalName]
+            if (current == null || current.detectedAt.passedSince() >= expiry) {
+                credits[internalName] = Credit(amount, SimpleTimeMark.now())
+            } else {
+                current.amount += amount
+            }
+        }
+
+        fun consume(internalName: NeuInternalName, amount: Int): Int {
+            removeExpired()
+            val credit = credits[internalName] ?: return 0
+            val consumed = minOf(amount, credit.amount)
+            credit.amount -= consumed
+            if (credit.amount <= 0) credits.remove(internalName)
+            return consumed
+        }
+
+        fun clear() = credits.clear()
+
+        private fun removeExpired() = credits.entries.removeIf { it.value.detectedAt.passedSince() >= expiry }
+    }
 
     private val tracker = SkyHanniItemTracker(
         "Greenhouse Profit Tracker",
@@ -176,7 +223,7 @@ object GreenhouseProfitTracker {
     private fun onEntityClick(event: EntityClickEvent) {
         if (!isEnabled() || event.action != EntityClickEvent.ActionType.ATTACK) return
         val mob = event.clickedEntity.mob ?: return
-        if (mob.name in mutationMobDrops) attackedMutationMobs.add(mob.id)
+        if (mutationMobNamePattern.matches(mob.name)) attackedMutationMobs.add(mob.id)
     }
 
     @HandleEvent(onlyOnIsland = IslandType.GARDEN)
@@ -184,23 +231,18 @@ object GreenhouseProfitTracker {
         if (!isEnabled()) return
         val mob = event.entity.mob ?: return
         if (!attackedMutationMobs.remove(mob.id)) return
-        val internalName = mutationMobDrops[mob.name] ?: return
-        val pending = pendingMutationMobDrops[internalName]
-        if (pending == null || pending.detectedAt.passedSince() >= MUTATION_MOB_DROP_EXPIRY) {
-            pendingMutationMobDrops[internalName] = PendingMutationMobDrop(1, SimpleTimeMark.now())
-        } else {
-            pending.amount++
-        }
+        val drop = MutationMobDrop.getByMobName(mob.name) ?: return
+        pendingMutationMobDrops.add(drop.internalName, 1)
+    }
+
+    @HandleEvent(onlyOnIsland = IslandType.GARDEN)
+    private fun onMobDespawn(event: MobEvent.DeSpawn.SkyblockMob) {
+        attackedMutationMobs.remove(event.mob.id)
     }
 
     private fun consumeMutationMobDrops(event: ItemAddEvent): Int? {
-        if (event.internalName !in mutationMobDrops.values) return null
-        pendingMutationMobDrops.entries.removeIf { it.value.detectedAt.passedSince() >= MUTATION_MOB_DROP_EXPIRY }
-        val pending = pendingMutationMobDrops[event.internalName] ?: return 0
-        val consumed = minOf(event.amount, pending.amount)
-        pending.amount -= consumed
-        if (pending.amount <= 0) pendingMutationMobDrops.remove(event.internalName)
-        return consumed
+        if (!MutationMobDrop.isDrop(event.internalName)) return null
+        return pendingMutationMobDrops.consume(event.internalName, event.amount)
     }
 
     @HandleEvent(PestKillEvent::class)
@@ -212,22 +254,10 @@ object GreenhouseProfitTracker {
     @HandleEvent(onlyOnIsland = IslandType.GARDEN)
     private fun onPestItemDrop(event: PestItemDropEvent) {
         if (!isEnabled()) return
-        val pending = pendingPestDrops[event.internalName]
-        if (pending == null || pending.detectedAt.passedSince() >= PEST_DROP_EXPIRY) {
-            pendingPestDrops[event.internalName] = PendingPestDrop(event.amount, SimpleTimeMark.now())
-        } else {
-            pending.amount += event.amount
-        }
+        pendingPestDrops.add(event.internalName, event.amount)
     }
 
-    private fun consumePestDrops(event: ItemAddEvent): Int {
-        pendingPestDrops.entries.removeIf { it.value.detectedAt.passedSince() >= PEST_DROP_EXPIRY }
-        val pending = pendingPestDrops[event.internalName] ?: return 0
-        val consumed = minOf(event.amount, pending.amount)
-        pending.amount -= consumed
-        if (pending.amount <= 0) pendingPestDrops.remove(event.internalName)
-        return consumed
-    }
+    private fun consumePestDrops(event: ItemAddEvent) = pendingPestDrops.consume(event.internalName, event.amount)
 
     private fun addToGreenhouseCollection(event: ItemAddEvent) {
         val primitiveStack = NeuItems.getPrimitiveMultiplier(event.internalName)
@@ -244,8 +274,7 @@ object GreenhouseProfitTracker {
         if (tracking) {
             tracker.startSessionUptime()
         } else {
-            pendingItemAdds.clear()
-            inventoryCropCredits.clear()
+            clearAttributionState()
             tracker.pauseSessionUptime()
         }
     }
@@ -253,6 +282,11 @@ object GreenhouseProfitTracker {
     @HandleEvent
     private fun onWorldChange() {
         wasTracking = false
+        clearAttributionState()
+        tracker.pauseSessionUptime()
+    }
+
+    private fun clearAttributionState() {
         lastPestKill = SimpleTimeMark.farPast()
         pendingPestDrops.clear()
         attackedMutationMobs.clear()
@@ -260,7 +294,6 @@ object GreenhouseProfitTracker {
         pendingItemAdds.clear()
         inventoryCropCredits.clear()
         itemAddFlushScheduled = false
-        tracker.pauseSessionUptime()
     }
 
     private fun drawDisplay(data: Data): List<Searchable> = buildList {
