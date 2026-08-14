@@ -8,10 +8,12 @@ import at.hannibal2.skyhanni.data.IslandType
 import at.hannibal2.skyhanni.data.ItemAddManager
 import at.hannibal2.skyhanni.data.garden.CropCollectionApi.addCollectionCounter
 import at.hannibal2.skyhanni.events.ItemAddEvent
+import at.hannibal2.skyhanni.events.garden.pests.PestKillEvent
 import at.hannibal2.skyhanni.events.garden.pests.PestItemDropEvent
 import at.hannibal2.skyhanni.events.minecraft.SkyHanniTickEvent
 import at.hannibal2.skyhanni.features.garden.CropCollectionType
 import at.hannibal2.skyhanni.features.garden.CropType
+import at.hannibal2.skyhanni.features.garden.tracker.PestProfitTracker
 import at.hannibal2.skyhanni.features.garden.tracker.RareCropTracker
 import at.hannibal2.skyhanni.skyhannimodule.SkyHanniModule
 import at.hannibal2.skyhanni.utils.DelayedRun
@@ -32,8 +34,10 @@ import kotlin.time.Duration.Companion.seconds
 object GreenhouseProfitTracker {
     private val PEST_ATTRIBUTION_WINDOW = 1.seconds
     private val PEST_DROP_EXPIRY = 10.seconds
+    private val PEST_KILL_DROP_WINDOW = 3.seconds
     private val config get() = SkyHanniMod.feature.garden.greenhouse.profitTracker
     private var wasTracking = false
+    private var lastPestKill = SimpleTimeMark.farPast()
     private val pendingPestDrops = mutableMapOf<NeuInternalName, PendingPestDrop>()
     private val pendingItemAdds = mutableListOf<ItemAddEvent>()
     private val inventoryCropCredits = mutableMapOf<NeuInternalName, Long>()
@@ -123,6 +127,7 @@ object GreenhouseProfitTracker {
 
     private fun processItemAdd(event: ItemAddEvent) {
         if (event.source != ItemAddManager.Source.COMMAND && !isHarvestDrop(event.internalName)) return
+        if (event.source != ItemAddManager.Source.COMMAND && isRecentPestDrop(event.internalName)) return
         val pestAmount = if (event.source == ItemAddManager.Source.COMMAND) 0 else consumePestDrops(event)
         val greenhouseAmount = event.amount - pestAmount
         if (greenhouseAmount <= 0) return
@@ -142,6 +147,15 @@ object GreenhouseProfitTracker {
         if (internalName in rareCropDrops) return true
         val primitiveName = NeuItems.getPrimitiveMultiplier(internalName).internalName.itemNameWithoutColor
         return CropType.getByNameOrNull(primitiveName) != null
+    }
+
+    private fun isRecentPestDrop(internalName: NeuInternalName): Boolean =
+        lastPestKill.passedSince() < PEST_KILL_DROP_WINDOW && PestProfitTracker.isPestDropItem(internalName)
+
+    @HandleEvent(PestKillEvent::class)
+    private fun onPestKill() {
+        if (!isEnabled()) return
+        lastPestKill = SimpleTimeMark.now()
     }
 
     @HandleEvent(onlyOnIsland = IslandType.GARDEN)
@@ -188,6 +202,7 @@ object GreenhouseProfitTracker {
     @HandleEvent
     private fun onWorldChange() {
         wasTracking = false
+        lastPestKill = SimpleTimeMark.farPast()
         pendingPestDrops.clear()
         pendingItemAdds.clear()
         inventoryCropCredits.clear()
