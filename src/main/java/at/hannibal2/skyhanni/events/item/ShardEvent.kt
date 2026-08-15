@@ -20,6 +20,7 @@ enum class ShardSource {
     NAGA,
     SALT,
     HUNT,
+    LOOT_SHARE,
     FISHING,
     SENT_TO_HUNTING_BOX,
     CAPTURED,

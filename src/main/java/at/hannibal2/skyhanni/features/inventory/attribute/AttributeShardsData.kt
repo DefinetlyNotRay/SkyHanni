@@ -335,7 +335,7 @@ object AttributeShardsData {
     private val shardGainChatPatterns = mapOf(
         caughtShardsPattern to (true to ShardSource.HUNT),
         caughtMultipleShardsPattern to (true to ShardSource.FISHING),
-        lootShareShardPattern to (true to ShardSource.HUNT),
+        lootShareShardPattern to (true to ShardSource.LOOT_SHARE),
         charmedShardPattern to (true to null),
         sentToHuntingBoxPattern to (false to ShardSource.SENT_TO_HUNTING_BOX),
         capturedShardPattern to (true to ShardSource.CAPTURED),

@@ -13,11 +13,14 @@ import at.hannibal2.skyhanni.events.entity.EntityClickEvent
 import at.hannibal2.skyhanni.events.entity.EntityDeathEvent
 import at.hannibal2.skyhanni.events.garden.pests.PestKillEvent
 import at.hannibal2.skyhanni.events.garden.pests.PestItemDropEvent
+import at.hannibal2.skyhanni.events.item.ShardGainEvent
+import at.hannibal2.skyhanni.events.item.ShardSource
 import at.hannibal2.skyhanni.events.minecraft.SkyHanniTickEvent
 import at.hannibal2.skyhanni.features.garden.CropCollectionType
 import at.hannibal2.skyhanni.features.garden.CropType
 import at.hannibal2.skyhanni.features.garden.tracker.PestProfitTracker
 import at.hannibal2.skyhanni.features.garden.tracker.RareCropTracker
+import at.hannibal2.skyhanni.features.inventory.attribute.AttributeShardsData
 import at.hannibal2.skyhanni.skyhannimodule.SkyHanniModule
 import at.hannibal2.skyhanni.utils.DelayedRun
 import at.hannibal2.skyhanni.utils.ItemUtils.itemNameWithoutColor
@@ -80,6 +83,9 @@ object GreenhouseProfitTracker {
             private val internalNames = entries.mapTo(mutableSetOf()) { it.internalName }
 
             fun getByMobName(name: String): MutationMobDrop? = byMobName[name]
+            fun getByShardInternalName(internalName: NeuInternalName): MutationMobDrop? =
+                entries.firstOrNull { AttributeShardsData.shardNameToInternalName(it.mobName) == internalName }
+
             fun isDrop(internalName: NeuInternalName): Boolean = internalName in internalNames
         }
     }
@@ -243,6 +249,16 @@ object GreenhouseProfitTracker {
     private fun consumeMutationMobDrops(event: ItemAddEvent): Int? {
         if (!MutationMobDrop.isDrop(event.internalName)) return null
         return pendingMutationMobDrops.consume(event.internalName, event.amount)
+    }
+
+    @HandleEvent(onlyOnIsland = IslandType.GARDEN)
+    private fun onShardGain(event: ShardGainEvent) {
+        if (!isEnabled() || event.source != ShardSource.HUNT) return
+        val drop = MutationMobDrop.getByShardInternalName(event.shardInternalName) ?: return
+
+        pendingMutationMobDrops.add(drop.internalName, 1)
+        tracker.addItem(event.shardInternalName, event.amount, command = false)
+        tracker.modify { it.pickups++ }
     }
 
     @HandleEvent(PestKillEvent::class)
