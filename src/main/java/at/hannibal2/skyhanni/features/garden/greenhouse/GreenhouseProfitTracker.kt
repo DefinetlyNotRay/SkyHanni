@@ -14,7 +14,6 @@ import at.hannibal2.skyhanni.events.entity.EntityDeathEvent
 import at.hannibal2.skyhanni.events.garden.pests.PestKillEvent
 import at.hannibal2.skyhanni.events.garden.pests.PestItemDropEvent
 import at.hannibal2.skyhanni.events.item.ShardGainEvent
-import at.hannibal2.skyhanni.events.item.ShardSource
 import at.hannibal2.skyhanni.events.minecraft.SkyHanniTickEvent
 import at.hannibal2.skyhanni.features.garden.CropCollectionType
 import at.hannibal2.skyhanni.features.garden.CropType
@@ -57,13 +56,11 @@ object GreenhouseProfitTracker {
     private val PEST_ATTRIBUTION_WINDOW = 1.seconds
     private val PEST_DROP_EXPIRY = 10.seconds
     private val PEST_KILL_DROP_WINDOW = 3.seconds
-    private val MUTATION_MOB_DROP_EXPIRY = 5.seconds
     private val config get() = SkyHanniMod.feature.garden.greenhouse.profitTracker
     private var wasTracking = false
     private var lastPestKill = SimpleTimeMark.farPast()
     private val pendingPestDrops = TimedDropCredits(PEST_DROP_EXPIRY)
     private val attackedMutationMobs = mutableSetOf<Int>()
-    private val pendingMutationMobDrops = TimedDropCredits(MUTATION_MOB_DROP_EXPIRY)
     private val pendingItemAdds = mutableListOf<ItemAddEvent>()
     private val inventoryCropCredits = mutableMapOf<NeuInternalName, Long>()
     private var itemAddFlushScheduled = false
@@ -80,13 +77,8 @@ object GreenhouseProfitTracker {
 
         companion object {
             private val byMobName = entries.associateBy { it.mobName }
-            private val internalNames = entries.mapTo(mutableSetOf()) { it.internalName }
 
             fun getByMobName(name: String): MutationMobDrop? = byMobName[name]
-            fun getByShardInternalName(internalName: NeuInternalName): MutationMobDrop? =
-                entries.firstOrNull { AttributeShardsData.shardNameToInternalName(it.mobName) == internalName }
-
-            fun isDrop(internalName: NeuInternalName): Boolean = internalName in internalNames
         }
     }
 
@@ -195,14 +187,10 @@ object GreenhouseProfitTracker {
 
     private fun processItemAdd(event: ItemAddEvent) {
         val fromCommand = event.source == ItemAddManager.Source.COMMAND
-        val mutationMobDropAmount = if (fromCommand) null else {
-            consumeMutationMobDrops(event)
-        }
-        if (mutationMobDropAmount == 0) return
-        if (mutationMobDropAmount == null && !fromCommand && !isHarvestDrop(event.internalName)) return
-        if (mutationMobDropAmount == null && !fromCommand && isRecentPestDrop(event.internalName)) return
+        if (!fromCommand && !isHarvestDrop(event.internalName)) return
+        if (!fromCommand && isRecentPestDrop(event.internalName)) return
         val pestAmount = if (fromCommand) 0 else consumePestDrops(event)
-        val greenhouseAmount = (mutationMobDropAmount ?: event.amount) - pestAmount
+        val greenhouseAmount = event.amount - pestAmount
         if (greenhouseAmount <= 0) return
 
         val greenhouseEvent = if (greenhouseAmount == event.amount) event else {
@@ -236,29 +224,31 @@ object GreenhouseProfitTracker {
     private fun onEntityDeath(event: EntityDeathEvent<*>) {
         if (!isEnabled()) return
         val mob = event.entity.mob ?: return
-        if (!attackedMutationMobs.remove(mob.id)) return
-        val drop = MutationMobDrop.getByMobName(mob.name) ?: return
-        pendingMutationMobDrops.add(drop.internalName, 1)
+        creditAttackedMutationMob(mob.id, mob.name)
     }
 
     @HandleEvent(onlyOnIsland = IslandType.GARDEN)
-    private fun onMobDespawn(event: MobEvent.DeSpawn.SkyblockMob) {
-        attackedMutationMobs.remove(event.mob.id)
+    private fun onMobDespawn(event: MobEvent.DeSpawn) {
+        creditAttackedMutationMob(event.mob.id, event.mob.name)
     }
 
-    private fun consumeMutationMobDrops(event: ItemAddEvent): Int? {
-        if (!MutationMobDrop.isDrop(event.internalName)) return null
-        return pendingMutationMobDrops.consume(event.internalName, event.amount)
+    private fun creditAttackedMutationMob(mobId: Int, mobName: String) {
+        if (!attackedMutationMobs.remove(mobId)) return
+        val drop = MutationMobDrop.getByMobName(mobName) ?: return
+        trackMutationDrop(drop)
+    }
+
+    private fun trackMutationDrop(drop: MutationMobDrop) {
+        tracker.addItem(drop.internalName, 1, command = false)
+        tracker.modify { it.pickups++ }
     }
 
     @HandleEvent(onlyOnIsland = IslandType.GARDEN)
     private fun onShardGain(event: ShardGainEvent) {
-        if (!isEnabled() || event.source != ShardSource.HUNT) return
-        val drop = MutationMobDrop.getByShardInternalName(event.shardInternalName) ?: return
-
-        pendingMutationMobDrops.add(drop.internalName, 1)
-        tracker.addItem(event.shardInternalName, event.amount, command = false)
-        tracker.modify { it.pickups++ }
+        if (!isEnabled()) return
+        val shardName = AttributeShardsData.shardInternalNameToShardName(event.shardInternalName)
+        val drop = MutationMobDrop.getByMobName(shardName) ?: return
+        trackMutationDrop(drop)
     }
 
     @HandleEvent(PestKillEvent::class)
@@ -306,7 +296,6 @@ object GreenhouseProfitTracker {
         lastPestKill = SimpleTimeMark.farPast()
         pendingPestDrops.clear()
         attackedMutationMobs.clear()
-        pendingMutationMobDrops.clear()
         pendingItemAdds.clear()
         inventoryCropCredits.clear()
         itemAddFlushScheduled = false
