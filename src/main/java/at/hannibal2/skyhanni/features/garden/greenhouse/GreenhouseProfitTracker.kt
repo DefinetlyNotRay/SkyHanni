@@ -9,7 +9,6 @@ import at.hannibal2.skyhanni.data.ItemAddManager
 import at.hannibal2.skyhanni.data.garden.CropCollectionApi.addCollectionCounter
 import at.hannibal2.skyhanni.events.ItemAddEvent
 import at.hannibal2.skyhanni.events.MobEvent
-import at.hannibal2.skyhanni.events.entity.EntityClickEvent
 import at.hannibal2.skyhanni.events.entity.EntityDeathEvent
 import at.hannibal2.skyhanni.events.garden.pests.PestKillEvent
 import at.hannibal2.skyhanni.events.garden.pests.PestItemDropEvent
@@ -17,10 +16,12 @@ import at.hannibal2.skyhanni.events.item.ShardGainEvent
 import at.hannibal2.skyhanni.events.minecraft.SkyHanniTickEvent
 import at.hannibal2.skyhanni.features.garden.CropCollectionType
 import at.hannibal2.skyhanni.features.garden.CropType
+import at.hannibal2.skyhanni.features.garden.pests.SprayType
 import at.hannibal2.skyhanni.features.garden.tracker.PestProfitTracker
 import at.hannibal2.skyhanni.features.garden.tracker.RareCropTracker
 import at.hannibal2.skyhanni.features.inventory.attribute.AttributeShardsData
 import at.hannibal2.skyhanni.skyhannimodule.SkyHanniModule
+import at.hannibal2.skyhanni.utils.ChatUtils
 import at.hannibal2.skyhanni.utils.DelayedRun
 import at.hannibal2.skyhanni.utils.ItemUtils.itemNameWithoutColor
 import at.hannibal2.skyhanni.utils.MobUtils.mob
@@ -56,14 +57,21 @@ object GreenhouseProfitTracker {
     private val PEST_ATTRIBUTION_WINDOW = 1.seconds
     private val PEST_DROP_EXPIRY = 10.seconds
     private val PEST_KILL_DROP_WINDOW = 3.seconds
+    private val MUTATION_DROP_ATTRIBUTION_WINDOW = 1.seconds
     private val config get() = SkyHanniMod.feature.garden.greenhouse.profitTracker
     private var wasTracking = false
     private var lastPestKill = SimpleTimeMark.farPast()
     private val pendingPestDrops = TimedDropCredits(PEST_DROP_EXPIRY)
-    private val attackedMutationMobs = mutableSetOf<Int>()
+    private val detectedMutationMobs = mutableSetOf<Int>()
+    private val pendingMutationMobDrops = mutableMapOf<MutationMobDrop, Int>()
+    private val pendingMutationShardDrops = mutableMapOf<MutationMobDrop, Int>()
+    private var mutationDropFlushScheduled = false
     private val pendingItemAdds = mutableListOf<ItemAddEvent>()
     private val inventoryCropCredits = mutableMapOf<NeuInternalName, Long>()
     private var itemAddFlushScheduled = false
+    private var debugRecording = false
+    private var debugSequence = 0
+    private val debugLog = mutableListOf<String>()
     private val rareCropDrops by lazy {
         RareCropTracker.RareCropDropType.entries.mapTo(mutableSetOf()) {
             NeuInternalName.fromItemNameOrInternalName(it.cleanName)
@@ -141,12 +149,18 @@ object GreenhouseProfitTracker {
 
     @HandleEvent(onlyOnIsland = IslandType.GARDEN)
     private fun onItemAdd(event: ItemAddEvent) {
-        if (!isEnabled()) return
+        debug("ItemAdd received: ${event.internalName} x${event.amount}, source=${event.source}, enabled=${isEnabled()}")
+        if (!isEnabled()) {
+            debug("ItemAdd rejected: config.enabled=${config.enabled}, inGreenhouse=${GreenhouseUtils.isInGreenhouse()}")
+            return
+        }
 
         if (event.source != ItemAddManager.Source.COMMAND) {
             pendingItemAdds.add(event)
+            debug("ItemAdd queued for attribution; queueSize=${pendingItemAdds.size}")
             if (!itemAddFlushScheduled) {
                 itemAddFlushScheduled = true
+                debug("Scheduled item attribution flush in $PEST_ATTRIBUTION_WINDOW")
                 DelayedRun.runDelayed(PEST_ATTRIBUTION_WINDOW, "Greenhouse item attribution") {
                     flushPendingItemAdds()
                 }
@@ -160,11 +174,13 @@ object GreenhouseProfitTracker {
         itemAddFlushScheduled = false
         val events = pendingItemAdds.toList()
         pendingItemAdds.clear()
+        debug("Flushing ${events.size} queued item adds")
 
         events.filter { it.source == ItemAddManager.Source.ITEM_ADD && isHarvestDrop(it.internalName) }.forEach { event ->
             val primitive = NeuItems.getPrimitiveMultiplier(event.internalName)
             val amount = primitive.amount.toLong() * event.amount
             inventoryCropCredits[primitive.internalName] = (inventoryCropCredits[primitive.internalName] ?: 0) + amount
+            debug("Inventory credit: ${primitive.internalName} +$amount base units")
         }
 
         for (event in events) {
@@ -179,6 +195,10 @@ object GreenhouseProfitTracker {
             val duplicatedAmount = minOf(event.amount.toLong(), cropCredit / primitivePerItem).toInt()
             inventoryCropCredits[primitive.internalName] = cropCredit - duplicatedAmount * primitivePerItem
             val uniqueAmount = event.amount - duplicatedAmount
+            debug(
+                "Sack dedupe: ${event.internalName} x${event.amount}, primitive=${primitive.internalName}" +
+                    ", credit=$cropCredit, duplicate=$duplicatedAmount, unique=$uniqueAmount",
+            )
             if (uniqueAmount > 0) {
                 processItemAdd(ItemAddEvent(event.internalName, uniqueAmount, event.source))
             }
@@ -187,17 +207,27 @@ object GreenhouseProfitTracker {
 
     private fun processItemAdd(event: ItemAddEvent) {
         val fromCommand = event.source == ItemAddManager.Source.COMMAND
-        if (!fromCommand && !isHarvestDrop(event.internalName)) return
-        if (!fromCommand && isRecentPestDrop(event.internalName)) return
+        if (!fromCommand && !isHarvestDrop(event.internalName)) {
+            debug("Item rejected: ${event.internalName} is not a recognized harvest drop")
+            return
+        }
+        if (!fromCommand && isRecentPestDrop(event.internalName)) {
+            debug("Item rejected: ${event.internalName} matched the recent pest-kill exclusion")
+            return
+        }
         val pestAmount = if (fromCommand) 0 else consumePestDrops(event)
         val greenhouseAmount = event.amount - pestAmount
-        if (greenhouseAmount <= 0) return
+        if (greenhouseAmount <= 0) {
+            debug("Item rejected: ${event.internalName} x${event.amount} fully consumed by pest credit ($pestAmount)")
+            return
+        }
 
         val greenhouseEvent = if (greenhouseAmount == event.amount) event else {
             ItemAddEvent(event.internalName, greenhouseAmount, event.source)
         }
 
         with(tracker) { greenhouseEvent.addItemFromEvent() }
+        debug("Item attributed: ${greenhouseEvent.internalName} x${greenhouseEvent.amount}, source=${greenhouseEvent.source}")
         if (event.source == ItemAddManager.Source.COMMAND) return
 
         tracker.modify { it.pickups++ }
@@ -205,6 +235,7 @@ object GreenhouseProfitTracker {
     }
 
     private fun isHarvestDrop(internalName: NeuInternalName): Boolean {
+        if (SprayType.getByInternalName(internalName) != null) return false
         if (internalName in rareCropDrops) return true
         val primitiveName = NeuItems.getPrimitiveMultiplier(internalName).internalName.itemNameWithoutColor
         return CropType.getByNameOrNull(primitiveName) != null
@@ -214,41 +245,99 @@ object GreenhouseProfitTracker {
         lastPestKill.passedSince() < PEST_KILL_DROP_WINDOW && PestProfitTracker.isPestDropItem(internalName)
 
     @HandleEvent(onlyOnIsland = IslandType.GARDEN)
-    private fun onEntityClick(event: EntityClickEvent) {
-        if (!isEnabled() || event.action != EntityClickEvent.ActionType.ATTACK) return
-        val mob = event.clickedEntity.mob ?: return
-        if (mutationMobNamePattern.matches(mob.name)) attackedMutationMobs.add(mob.id)
+    private fun onMobFirstSeen(event: MobEvent.FirstSeen) {
+        if (!debugRecording) return
+        val name = event.mob.name
+        if (name.contains("timestalk", ignoreCase = true) || name.contains("zombud", ignoreCase = true)) {
+            debug(
+                "Mutation-like mob first seen: id=${event.mob.id}, name='$name', " +
+                    "patternMatch=${mutationMobNamePattern.matches(name)}",
+            )
+        }
     }
 
     @HandleEvent(onlyOnIsland = IslandType.GARDEN)
     private fun onEntityDeath(event: EntityDeathEvent<*>) {
-        if (!isEnabled()) return
-        val mob = event.entity.mob ?: return
-        creditAttackedMutationMob(mob.id, mob.name)
+        if (!isEnabled()) {
+            debug("EntityDeath ignored: tracker disabled or outside Greenhouse")
+            return
+        }
+        val mob = event.entity.mob
+        if (mob == null) {
+            debug("EntityDeath ignored: entity did not resolve to a SkyBlock mob")
+            return
+        }
+        debug("EntityDeath: id=${mob.id}, name='${mob.name}'")
+        detectMutationMobDrop(mob.id, mob.name)
     }
 
     @HandleEvent(onlyOnIsland = IslandType.GARDEN)
     private fun onMobDespawn(event: MobEvent.DeSpawn) {
-        creditAttackedMutationMob(event.mob.id, event.mob.name)
+        if (!isEnabled()) {
+            debug("MobDespawn ignored: tracker disabled or outside Greenhouse")
+            return
+        }
+        debug("MobDespawn: id=${event.mob.id}, name='${event.mob.name}'")
+        detectMutationMobDrop(event.mob.id, event.mob.name)
     }
 
-    private fun creditAttackedMutationMob(mobId: Int, mobName: String) {
-        if (!attackedMutationMobs.remove(mobId)) return
-        val drop = MutationMobDrop.getByMobName(mobName) ?: return
-        trackMutationDrop(drop)
+    private fun detectMutationMobDrop(mobId: Int, mobName: String) {
+        if (!mutationMobNamePattern.matches(mobName)) {
+            debug("Mutation mob rejected: name '$mobName' did not match mutationMobNamePattern")
+            return
+        }
+        if (!detectedMutationMobs.add(mobId)) {
+            debug("Mutation mob rejected: entity id $mobId was already detected")
+            return
+        }
+        val drop = MutationMobDrop.getByMobName(mobName)
+        if (drop == null) {
+            debug("Mutation mob rejected: matched name '$mobName' has no MutationMobDrop mapping")
+            return
+        }
+        pendingMutationMobDrops[drop] = (pendingMutationMobDrops[drop] ?: 0) + 1
+        debug("Mutation mob accepted: $mobName -> ${drop.internalName}; pendingMob=${pendingMutationMobDrops[drop]}")
+        scheduleMutationDropFlush()
     }
 
-    private fun trackMutationDrop(drop: MutationMobDrop) {
-        tracker.addItem(drop.internalName, 1, command = false)
-        tracker.modify { it.pickups++ }
+    private fun scheduleMutationDropFlush() {
+        if (mutationDropFlushScheduled) return
+        mutationDropFlushScheduled = true
+        debug("Scheduled mutation attribution flush in $MUTATION_DROP_ATTRIBUTION_WINDOW")
+        DelayedRun.runDelayed(MUTATION_DROP_ATTRIBUTION_WINDOW, "Greenhouse mutation drop attribution") {
+            mutationDropFlushScheduled = false
+            MutationMobDrop.entries.forEach { drop ->
+                val mobAmount = pendingMutationMobDrops[drop] ?: 0
+                val shardAmount = pendingMutationShardDrops[drop] ?: 0
+                val amount = maxOf(mobAmount, shardAmount)
+                debug("Mutation flush: $drop, mobSignals=$mobAmount, shardSignals=$shardAmount, attributed=$amount")
+                if (amount > 0) {
+                    tracker.addItem(drop.internalName, amount, command = false)
+                    tracker.modify { it.pickups += amount }
+                    debug("Mutation attributed: ${drop.internalName} x$amount")
+                }
+            }
+            pendingMutationMobDrops.clear()
+            pendingMutationShardDrops.clear()
+        }
     }
 
     @HandleEvent(onlyOnIsland = IslandType.GARDEN)
     private fun onShardGain(event: ShardGainEvent) {
-        if (!isEnabled()) return
+        debug("ShardGain received: ${event.shardInternalName} x${event.amount}, source=${event.source}, enabled=${isEnabled()}")
+        if (!isEnabled()) {
+            debug("ShardGain rejected: config.enabled=${config.enabled}, inGreenhouse=${GreenhouseUtils.isInGreenhouse()}")
+            return
+        }
         val shardName = AttributeShardsData.shardInternalNameToShardName(event.shardInternalName)
-        val drop = MutationMobDrop.getByMobName(shardName) ?: return
-        trackMutationDrop(drop)
+        val drop = MutationMobDrop.getByMobName(shardName)
+        if (drop == null) {
+            debug("ShardGain rejected: resolved name '$shardName' has no MutationMobDrop mapping")
+            return
+        }
+        pendingMutationShardDrops[drop] = (pendingMutationShardDrops[drop] ?: 0) + 1
+        debug("ShardGain accepted: '$shardName' -> ${drop.internalName}; pendingShard=${pendingMutationShardDrops[drop]}")
+        scheduleMutationDropFlush()
     }
 
     @HandleEvent(PestKillEvent::class)
@@ -293,9 +382,13 @@ object GreenhouseProfitTracker {
     }
 
     private fun clearAttributionState() {
+        debug("Clearing attribution state")
         lastPestKill = SimpleTimeMark.farPast()
         pendingPestDrops.clear()
-        attackedMutationMobs.clear()
+        detectedMutationMobs.clear()
+        pendingMutationMobDrops.clear()
+        pendingMutationShardDrops.clear()
+        mutationDropFlushScheduled = false
         pendingItemAdds.clear()
         inventoryCropCredits.clear()
         itemAddFlushScheduled = false
@@ -310,6 +403,13 @@ object GreenhouseProfitTracker {
 
     private fun isEnabled() = config.enabled && GreenhouseUtils.isInGreenhouse()
 
+    private fun debug(message: String) {
+        if (!debugRecording) return
+        debugSequence++
+        debugLog.add("#$debugSequence $message")
+        if (debugLog.size > MAX_DEBUG_LINES) debugLog.removeAt(0)
+    }
+
     @HandleEvent
     private fun onCommandRegistration(event: CommandRegistrationEvent) {
         event.registerBrigadier("shresetgreenhousetracker") {
@@ -318,5 +418,27 @@ object GreenhouseProfitTracker {
             category = CommandCategory.USERS_RESET
             simpleCallback { tracker.resetCommand() }
         }
+        event.registerBrigadier("shdebugghprofit") {
+            description = "Records Greenhouse Profit Tracker attribution decisions"
+            category = CommandCategory.DEVELOPER_DEBUG
+            simpleCallback {
+                if (!debugRecording) {
+                    debugLog.clear()
+                    debugSequence = 0
+                    debugRecording = true
+                    debug(
+                        "Recording started: config.enabled=${config.enabled}, " +
+                            "inGreenhouse=${GreenhouseUtils.isInGreenhouse()}, isEnabled=${isEnabled()}",
+                    )
+                    ChatUtils.chat("Greenhouse Profit Tracker debug recording started. Run §e/shdebugghprofit §ragain to stop and copy it.")
+                } else {
+                    debug("Recording stopped")
+                    debugRecording = false
+                    ChatUtils.clickToClipboard("Greenhouse Profit Tracker debug", debugLog)
+                }
+            }
+        }
     }
+
+    private const val MAX_DEBUG_LINES = 500
 }
