@@ -23,6 +23,7 @@ import at.hannibal2.skyhanni.features.inventory.attribute.AttributeShardsData
 import at.hannibal2.skyhanni.skyhannimodule.SkyHanniModule
 import at.hannibal2.skyhanni.utils.ChatUtils
 import at.hannibal2.skyhanni.utils.DelayedRun
+import at.hannibal2.skyhanni.utils.ItemCategory
 import at.hannibal2.skyhanni.utils.ItemUtils.itemNameWithoutColor
 import at.hannibal2.skyhanni.utils.MobUtils.mob
 import at.hannibal2.skyhanni.utils.NeuInternalName
@@ -85,8 +86,11 @@ object GreenhouseProfitTracker {
 
         companion object {
             private val byMobName = entries.associateBy { it.mobName }
+            private val internalNames = entries.mapTo(mutableSetOf()) { it.internalName }
 
             fun getByMobName(name: String): MutationMobDrop? = byMobName[name]
+
+            fun isMobDrop(internalName: NeuInternalName): Boolean = internalName in internalNames
         }
     }
 
@@ -237,6 +241,9 @@ object GreenhouseProfitTracker {
     private fun isHarvestDrop(internalName: NeuInternalName): Boolean {
         if (SprayType.getByInternalName(internalName) != null) return false
         if (internalName in rareCropDrops) return true
+        if (!MutationMobDrop.isMobDrop(internalName) &&
+            internalName.getItemCategoryOrNull() == ItemCategory.MUTATION
+        ) return true
         val primitiveName = NeuItems.getPrimitiveMultiplier(internalName).internalName.itemNameWithoutColor
         return CropType.getByNameOrNull(primitiveName) != null
     }
