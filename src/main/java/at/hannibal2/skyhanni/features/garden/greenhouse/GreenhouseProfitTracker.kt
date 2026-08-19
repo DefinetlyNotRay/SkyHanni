@@ -39,7 +39,6 @@ import at.hannibal2.skyhanni.utils.tracker.ItemTrackerData
 import at.hannibal2.skyhanni.utils.tracker.SessionUptime
 import at.hannibal2.skyhanni.utils.tracker.SkyHanniItemTracker
 import com.google.gson.annotations.Expose
-import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 @SkyHanniModule
@@ -56,13 +55,12 @@ object GreenhouseProfitTracker {
     )
 
     private val PEST_ATTRIBUTION_WINDOW = 1.seconds
-    private val PEST_DROP_EXPIRY = 10.seconds
     private val PEST_KILL_DROP_WINDOW = 3.seconds
     private val MUTATION_DROP_ATTRIBUTION_WINDOW = 1.seconds
     private val config get() = SkyHanniMod.feature.garden.greenhouse.profitTracker
     private var wasTracking = false
     private var lastPestKill = SimpleTimeMark.farPast()
-    private val pendingPestDrops = TimedDropCredits(PEST_DROP_EXPIRY)
+    private val pendingPestDrops = DropCredits()
     private val detectedMutationMobs = mutableSetOf<Int>()
     private val pendingMutationMobDrops = mutableMapOf<MutationMobDrop, Int>()
     private val pendingMutationShardDrops = mutableMapOf<MutationMobDrop, Int>()
@@ -94,32 +92,22 @@ object GreenhouseProfitTracker {
         }
     }
 
-    private class TimedDropCredits(private val expiry: Duration) {
-        private data class Credit(var amount: Int, val detectedAt: SimpleTimeMark)
-
-        private val credits = mutableMapOf<NeuInternalName, Credit>()
+    private class DropCredits {
+        private val credits = mutableMapOf<NeuInternalName, Int>()
 
         fun add(internalName: NeuInternalName, amount: Int) {
-            val current = credits[internalName]
-            if (current == null || current.detectedAt.passedSince() >= expiry) {
-                credits[internalName] = Credit(amount, SimpleTimeMark.now())
-            } else {
-                current.amount += amount
-            }
+            credits[internalName] = (credits[internalName] ?: 0) + amount
         }
 
         fun consume(internalName: NeuInternalName, amount: Int): Int {
-            removeExpired()
             val credit = credits[internalName] ?: return 0
-            val consumed = minOf(amount, credit.amount)
-            credit.amount -= consumed
-            if (credit.amount <= 0) credits.remove(internalName)
+            val consumed = minOf(amount, credit)
+            val remaining = credit - consumed
+            if (remaining <= 0) credits.remove(internalName) else credits[internalName] = remaining
             return consumed
         }
 
         fun clear() = credits.clear()
-
-        private fun removeExpired() = credits.entries.removeIf { it.value.detectedAt.passedSince() >= expiry }
     }
 
     private val tracker = SkyHanniItemTracker(
@@ -357,9 +345,14 @@ object GreenhouseProfitTracker {
     private fun onPestItemDrop(event: PestItemDropEvent) {
         if (!isEnabled()) return
         pendingPestDrops.add(event.internalName, event.amount)
+        debug("Pest credit added: ${event.internalName} x${event.amount}")
     }
 
-    private fun consumePestDrops(event: ItemAddEvent) = pendingPestDrops.consume(event.internalName, event.amount)
+    private fun consumePestDrops(event: ItemAddEvent): Int {
+        val consumed = pendingPestDrops.consume(event.internalName, event.amount)
+        if (consumed > 0) debug("Pest credit consumed: ${event.internalName} x$consumed")
+        return consumed
+    }
 
     private fun addToGreenhouseCollection(event: ItemAddEvent) {
         val primitiveStack = NeuItems.getPrimitiveMultiplier(event.internalName)
