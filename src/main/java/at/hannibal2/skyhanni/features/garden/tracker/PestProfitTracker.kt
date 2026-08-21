@@ -33,6 +33,7 @@ import at.hannibal2.skyhanni.features.garden.tracker.PestProfitTracker.drawDispl
 import at.hannibal2.skyhanni.skyhannimodule.SkyHanniModule
 import at.hannibal2.skyhanni.test.command.ErrorManager
 import at.hannibal2.skyhanni.utils.ConditionalUtils
+import at.hannibal2.skyhanni.utils.EnumUtils.isAnyOf
 import at.hannibal2.skyhanni.utils.ItemPriceSource
 import at.hannibal2.skyhanni.utils.ItemUtils.itemNameWithoutColor
 import at.hannibal2.skyhanni.utils.NeuInternalName
@@ -89,8 +90,8 @@ object PestProfitTracker : SkyHanniBucketedItemTracker<PestType, PestProfitTrack
      * REGEX-TEST: §6§lRARE DROP! §r§aNot Just a Pest Vinyl §r§6(Cocoaleech)
      * REGEX-FAIL: §6§lRARE CROP! §aCane Knot §e(§e+139.5)
      */
-    // TODO consider if we want to add Harvest Feast drops to Pest Profit Tracker - we need a way to distinguish drops
-    //  from breaking crops vs. killing pests since they use the same message
+    // Harvest Feast drops are handled elsewhere; they're added here if determined to come from a pest.
+    // This pattern intentionally does not match them.
     @Suppress("MaxLineLength")
     private val pestRareDropPattern by patternGroup.pattern(
         "raredrop",
@@ -268,9 +269,14 @@ object PestProfitTracker : SkyHanniBucketedItemTracker<PestType, PestProfitTrack
 
     @HandleEvent(onlyOnIsland = IslandType.GARDEN)
     fun onShardGain(event: ShardGainEvent) {
-        if (event.shardInternalName != PEST_SHARD) return
-        PestItemDropEvent(PEST_SHARD, event.amount).post()
-        addItem(PestType.UNKNOWN, PEST_SHARD, event.amount, command = false)
+        if (event.shardInternalName == PEST_SHARD) {
+            PestItemDropEvent(PEST_SHARD, event.amount).post()
+            addItem(PestType.UNKNOWN, PEST_SHARD, event.amount, command = false)
+            return
+        }
+        if (!event.source.isAnyOf(CHARM, HUNT)) return
+        val pestType = PestType.getByItemInternalNameOrNull(event.shardInternalName) ?: return
+        addItem(pestType, event.shardInternalName, event.amount, command = false)
     }
 
     private fun SkyHanniChatEvent.Allow.checkSprayChats() {
