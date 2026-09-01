@@ -51,7 +51,7 @@ public abstract class MixinModelFeatureRenderer {
     }
     *///?}
 
-    // The remaining hooks are beta's legacy outline implementation. 26.2 uses RenderChest instead.
+    // Beta's legacy outline hooks are 26.1-only; 26.2 uses RenderChest.
     //? if < 26.2 {
     /*@WrapOperation(
         method = "renderModel",
