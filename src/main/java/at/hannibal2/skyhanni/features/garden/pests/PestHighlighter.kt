@@ -15,7 +15,6 @@ object PestHighlighter {
     @HandleEvent(onlyOnIsland = IslandType.GARDEN)
     private fun onRenderEntityOutlines(event: RenderEntityOutlineEvent) {
         if (!config.pestHighlight) return
-        if (event.type !== RenderEntityOutlineEvent.Type.NO_XRAY) return
         val highlightColor = config.highlightColor.toColor()
 
         event.queueEntitiesToOutline { entity ->
