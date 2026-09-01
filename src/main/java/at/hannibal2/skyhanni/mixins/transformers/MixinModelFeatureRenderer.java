@@ -22,7 +22,6 @@ import net.minecraft.client.renderer.SubmitNodeStorage;
 
 @Mixin(ModelFeatureRenderer.class)
 public abstract class MixinModelFeatureRenderer {
-
     //~ if < 26.2 'prepareModel' -> 'renderModel'
     @WrapOperation(method = "prepareModel", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/model/Model;renderToBuffer(Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;III)V", ordinal = 0))
     private void applyRenderAlpha(

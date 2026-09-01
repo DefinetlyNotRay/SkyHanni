@@ -23,7 +23,6 @@ import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
     *///?}
 })
 public abstract class MixinSubmitNodeStorage implements GlowingStateStore, RenderAlphaStore {
-
     @Unique
     private boolean skyhanni$usingCustomOutline = false;
 
@@ -50,3 +49,4 @@ public abstract class MixinSubmitNodeStorage implements GlowingStateStore, Rende
         return this.skyhanni$usingCustomOutline;
     }
 }
+*///?}

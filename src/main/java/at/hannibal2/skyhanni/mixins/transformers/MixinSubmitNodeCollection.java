@@ -27,7 +27,6 @@ import java.util.List;
 
 @Mixin(SubmitNodeCollection.class)
 public abstract class MixinSubmitNodeCollection<E> {
-
     //? if >= 26.2 {
     @Shadow
     @Final
@@ -99,7 +98,6 @@ public abstract class MixinSubmitNodeCollection<E> {
         skyhanni$markCustomOutline(modelPartSubmit);
         original.call(storage, renderType, modelPartSubmit);
     }
-    *///?}
 
     @Unique
     private void skyhanni$markCustomOutline(Object submit) {
@@ -109,3 +107,4 @@ public abstract class MixinSubmitNodeCollection<E> {
         }
     }
 }
+*///?}
