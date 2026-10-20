@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "jellyshort",
+  "version": "0.3.0",
+  "name": "JellyShort",
+  "description": "Automatically shorten full-height Greenhouse Magic Jellybeans on your client.",
+  "environment": "client",
+  "entrypoints": { "client": ["dev.jellyshort.JellyShort"] },
+  "mixins": ["jellyshort.mixins.json"],
+  "depends": { "fabricloader": ">=0.19.0", "minecraft": ">=26.1 <=26.1.2", "java": ">=25", "fabric-api": "*" }
+}

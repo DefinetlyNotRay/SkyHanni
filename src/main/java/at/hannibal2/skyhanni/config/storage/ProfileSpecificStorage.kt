@@ -34,7 +34,6 @@ import at.hannibal2.skyhanni.features.foraging.ForagingTrackerLegacy
 import at.hannibal2.skyhanni.features.garden.CropAccessory
 import at.hannibal2.skyhanni.features.garden.CropType
 import at.hannibal2.skyhanni.features.garden.farming.lane.FarmingLane
-import at.hannibal2.skyhanni.features.garden.greenhouse.GreenhouseProfitTracker
 import at.hannibal2.skyhanni.features.garden.leaderboarddisplays.CropLeaderboardStorage
 import at.hannibal2.skyhanni.features.garden.leaderboarddisplays.PestLeaderboardStorage
 import at.hannibal2.skyhanni.features.garden.leaderboarddisplays.WeightLeaderboardStorage
@@ -684,46 +683,7 @@ class ProfileSpecificStorage(
 
         class GreenHouseStorage(
             @Expose var nextCycle: SimpleTimeMark = farPast(),
-            @Expose var profitTracker: GreenhouseProfitTracker.Data? = GreenhouseProfitTracker.Data(),
-            @Expose var detectedCropsByPlot: MutableMap<Int, MutableSet<String>>? = mutableMapOf(),
-            @Expose
-            var detectedCropPositionsByPlot: MutableMap<Int, MutableMap<String, LorenzVec>>? = mutableMapOf(),
-            @Expose
-            var ignoredCropReplacementsByPlot: MutableMap<Int, MutableSet<String>>? = mutableMapOf(),
-            @Expose
-            var mutationBlueprintsByPlot: MutableMap<Int, MutationBlueprintStorage>? = mutableMapOf(),
-            @Expose
-            var mutationBlueprintLayouts: MutableMap<String, MutationBlueprintStorage>? = mutableMapOf(),
-            @Expose
-            var activeMutationBlueprintByPlot: MutableMap<Int, String>? = mutableMapOf(),
-        ) {
-            fun getOrCreateProfitTracker(): GreenhouseProfitTracker.Data =
-                profitTracker ?: GreenhouseProfitTracker.Data().also { profitTracker = it }
-
-            class MutationBlueprintStorage(
-                @Expose var minXOffset: Int = 0,
-                @Expose var minZOffset: Int = 0,
-                @Expose var maxXOffset: Int = 0,
-                @Expose var maxZOffset: Int = 0,
-                @Expose var mutations: MutableList<MutationPlacementStorage> = mutableListOf(),
-                @Expose var importedCells: MutableList<BlueprintCellStorage> = mutableListOf(),
-                @Expose var targetMutationId: String = "",
-            )
-
-            class MutationPlacementStorage(
-                @Expose var mutationId: String = "",
-                @Expose var offset: LorenzVec = LorenzVec(),
-                @Expose var texture: String = "",
-                @Expose var size: Int = 1,
-            )
-
-            class BlueprintCellStorage(
-                @Expose var cropId: String = "",
-                @Expose var row: Int = 0,
-                @Expose var column: Int = 0,
-                @Expose var target: Boolean = false,
-            )
-        }
+        )
     }
 
     // - gui

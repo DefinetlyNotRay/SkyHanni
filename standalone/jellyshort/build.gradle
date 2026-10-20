@@ -1,0 +1,16 @@
+plugins { id 'net.fabricmc.fabric-loom' version '1.17-SNAPSHOT' }
+version = '0.3.0'
+group = 'dev.jellyshort'
+repositories { mavenCentral() }
+def mc = providers.gradleProperty('minecraft_version').getOrElse('26.1.2')
+dependencies {
+    minecraft "com.mojang:minecraft:${mc}"
+    implementation 'net.fabricmc:fabric-loader:0.19.3'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.14.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    implementation "net.fabricmc.fabric-api:fabric-api:${mc == '26.1' ? '0.145.1+26.1' : '0.155.2+26.1.2'}"
+}
+java { toolchain.languageVersion = JavaLanguageVersion.of(25); withSourcesJar() }
+tasks.withType(JavaCompile).configureEach { options.release = 25 }
+test { useJUnitPlatform() }
+tasks.named('jar') { archiveFileName = "jellyshort-${project.version}-mc${mc}.jar" }
